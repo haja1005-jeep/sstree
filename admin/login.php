@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
         
         <div class="login-footer">
-            &copy; 2024 신안군청. All rights reserved.
+            &copy; 2025 신안군. All rights reserved.
         </div>
     </div>
 </body>

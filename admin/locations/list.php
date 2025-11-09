@@ -1,12 +1,21 @@
-<?php
+﻿<?php
+/**
+ * 장소 목록
+ * Smart Tree Map - Sinan County
+ */
+
+require_once '../../config/config.php';
+require_once '../../includes/auth.php';
+
+checkAuth();
+
 $page_title = '장소 관리';
-require_once '../../includes/header.php';
 
 $database = new Database();
 $db = $database->getConnection();
 
 // 삭제 처리
-if (isset($_GET['delete']) && is_admin()) {
+if (isset($_GET['delete']) && isAdmin()) {
     $location_id = (int)$_GET['delete'];
     
     try {
@@ -46,7 +55,7 @@ if (isset($_GET['delete']) && is_admin()) {
 }
 
 // 검색 및 필터
-$search = isset($_GET['search']) ? sanitize_input($_GET['search']) : '';
+$search = isset($_GET['search']) ? sanitize($_GET['search']) : '';
 $region_filter = isset($_GET['region']) ? (int)$_GET['region'] : 0;
 $category_filter = isset($_GET['category']) ? (int)$_GET['category'] : 0;
 
@@ -99,6 +108,8 @@ $categories_query = "SELECT * FROM categories ORDER BY category_name";
 $categories_stmt = $db->prepare($categories_query);
 $categories_stmt->execute();
 $categories = $categories_stmt->fetchAll();
+
+require_once '../../includes/header.php';
 ?>
 
 <?php if (isset($success_message)): ?>
@@ -211,7 +222,7 @@ $categories = $categories_stmt->fetchAll();
                                 <td>
                                     <a href="view.php?id=<?php echo $location['location_id']; ?>" class="btn btn-sm btn-info">보기</a>
                                     <a href="edit.php?id=<?php echo $location['location_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
-                                    <?php if (is_admin()): ?>
+                                    <?php if (isAdmin()): ?>
                                         <a href="?delete=<?php echo $location['location_id']; ?>" 
                                            class="btn btn-sm btn-danger" 
                                            onclick="return confirm('이 장소를 삭제하시겠습니까?\n연결된 모든 사진과 나무 데이터가 삭제됩니다.');">삭제</a>

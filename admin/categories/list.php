@@ -66,10 +66,12 @@ include '../../includes/header.php';
             <tbody>
                 <?php if (count($categories) > 0): ?>
                     <?php foreach ($categories as $category): ?>
-                    <tr>
+                      <tr>
                         <td><?php echo htmlspecialchars($category['category_code']); ?></td>
                         <td><strong><?php echo htmlspecialchars($category['category_name']); ?></strong></td>
-                        <td><?php echo htmlspecialchars(substr($category['description'] ?? '', 0, 50)); ?></td>
+                        
+                        <td><?php echo htmlspecialchars(substr(isset($category['description']) ? $category['description'] : '', 0, 50)); ?></td>
+                        
                         <td><?php echo number_format($category['location_count']); ?>개</td>
                         <td><?php echo date('Y-m-d', strtotime($category['created_at'])); ?></td>
                         <td>

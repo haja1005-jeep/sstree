@@ -129,16 +129,18 @@ include '../includes/header.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (count($recentTrees) > 0): ?>
-                        <?php foreach ($recentTrees as $tree): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($tree['region_name'] ?? '-'); ?></td>
-                            <td><?php echo htmlspecialchars($tree['location_name'] ?? '-'); ?></td>
-                            <td><?php echo htmlspecialchars($tree['korean_name'] ?? '-'); ?></td>
-                            <td><?php echo date('Y-m-d', strtotime($tree['created_at'])); ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
+
+<?php if (count($recentTrees) > 0): // <-- <?를 <?php로 변경하는 것도 좋습니다. ?>
+    <?php foreach ($recentTrees as $tree): ?>
+    <tr>
+        <td><?php echo htmlspecialchars(isset($tree['region_name']) ? $tree['region_name'] : '-'); ?></td>
+        <td><?php echo htmlspecialchars(isset($tree['location_name']) ? $tree['location_name'] : '-'); ?></td>
+        <td><?php echo htmlspecialchars(isset($tree['korean_name']) ? $tree['korean_name'] : '-'); ?></td>
+        
+        <td><?php echo date('Y-m-d', strtotime($tree['created_at'])); ?></td>
+    </tr>
+    <?php endforeach; ?>
+<?php else: ?>
                         <tr>
                             <td colspan="4" style="text-align: center; color: #999;">등록된 나무가 없습니다.</td>
                         </tr>

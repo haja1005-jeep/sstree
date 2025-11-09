@@ -1,4 +1,9 @@
 <?php
+require_once '../../config/config.php';
+require_once '../../config/kakao_map.php';
+require_once '../../includes/auth.php';
+checkAuth();
+
 $page_title = '장소 상세보기';
 require_once '../../includes/header.php';
 
@@ -170,7 +175,7 @@ $tree_count = $tree_stmt->fetch()['tree_count'];
 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
     <a href="list.php" class="btn btn-secondary">← 목록으로</a>
     <a href="edit.php?id=<?php echo $location_id; ?>" class="btn btn-primary">수정</a>
-    <?php if (is_admin()): ?>
+    <?php if (isAdmin()): ?>
         <a href="list.php?delete=<?php echo $location_id; ?>" 
            class="btn btn-danger" 
            style="margin-left: auto;"
@@ -223,24 +228,6 @@ $tree_count = $tree_stmt->fetch()['tree_count'];
                     <div class="info-label">도로 폭</div>
                     <div class="info-value">
                         <?php echo number_format($location['width'], 2); ?> m
-                    </div>
-                </div>
-            <?php endif; ?>
-            
-            <?php if ($location['establishment_year']): ?>
-                <div class="info-item">
-                    <div class="info-label">조성년도</div>
-                    <div class="info-value">
-                        <?php echo $location['establishment_year']; ?>년
-                    </div>
-                </div>
-            <?php endif; ?>
-            
-            <?php if ($location['management_agency']): ?>
-                <div class="info-item">
-                    <div class="info-label">관리기관</div>
-                    <div class="info-value" style="font-size: 14px;">
-                        <?php echo htmlspecialchars($location['management_agency']); ?>
                     </div>
                 </div>
             <?php endif; ?>

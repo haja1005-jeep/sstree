@@ -3,6 +3,8 @@ require_once '../../config/config.php';
 require_once '../../includes/auth.php';
 checkAuth();
 $page_title = '수종 관리';
+
+
 $database = new Database();
 $db = $database->getConnection();
 
@@ -90,20 +92,22 @@ include '../../includes/header.php';
             <tbody>
                 <?php if (count($species_list) > 0): ?>
                     <?php foreach ($species_list as $species): ?>
-                    <tr>
-                        <td><em><?php echo htmlspecialchars($species['scientific_name']); ?></em></td>
-                        <td><strong><?php echo htmlspecialchars($species['korean_name']); ?></strong></td>
-                        <td><?php echo htmlspecialchars($species['english_name'] ?? '-'); ?></td>
-                        <td><?php echo htmlspecialchars($species['family'] ?? '-'); ?></td>
-                        <td><?php echo htmlspecialchars($species['genus'] ?? '-'); ?></td>
-                        <td><?php echo number_format($species['tree_count']); ?>그루</td>
-                        <td><?php echo date('Y-m-d', strtotime($species['created_at'])); ?></td>
+                       <tr>
+                        <td><?php echo htmlspecialchars($region['region_code']); ?></td>
+                        <td><strong><?php echo htmlspecialchars($region['region_name']); ?></strong></td>
+                        
+                        <td><?php echo htmlspecialchars(substr(isset($region['description']) ? $region['description'] : '', 0, 50)); ?><?php echo strlen(isset($region['description']) ? $region['description'] : '') > 50 ? '...' : ''; ?></td>
+                        
+                        <td><?php echo number_format($region['tree_count']); ?>그루</td>
+                        
+                        <td><?php echo htmlspecialchars(isset($region['creator_name']) ? $region['creator_name'] : '-'); ?></td>
+                        
+                        <td><?php echo date('Y-m-d', strtotime($region['created_at'])); ?></td>
                         <td>
-                            <a href="detail.php?id=<?php echo $species['species_id']; ?>" class="btn btn-sm btn-success">상세</a>
-                            <a href="edit.php?id=<?php echo $species['species_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
-                            <a href="?delete=<?php echo $species['species_id']; ?>" 
+                            <a href="edit.php?id=<?php echo $region['region_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
+                            <a href="?delete=<?php echo $region['region_id']; ?>" 
                                class="btn btn-sm btn-danger" 
-                               onclick="return confirmDelete('이 수종을 삭제하시겠습니까?')">삭제</a>
+                               onclick="return confirmDelete('이 지역을 삭제하시겠습니까?')">삭제</a>
                         </td>
                     </tr>
                     <?php endforeach; ?>

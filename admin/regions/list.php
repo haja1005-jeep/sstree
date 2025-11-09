@@ -92,9 +92,13 @@ include '../../includes/header.php';
                     <tr>
                         <td><?php echo htmlspecialchars($region['region_code']); ?></td>
                         <td><strong><?php echo htmlspecialchars($region['region_name']); ?></strong></td>
-                        <td><?php echo htmlspecialchars(substr($region['description'] ?? '', 0, 50)); ?><?php echo strlen($region['description'] ?? '') > 50 ? '...' : ''; ?></td>
+                        
+                        <td><?php echo htmlspecialchars(substr(isset($region['description']) ? $region['description'] : '', 0, 50)); ?><?php echo strlen(isset($region['description']) ? $region['description'] : '') > 50 ? '...' : ''; ?></td>
+                        
                         <td><?php echo number_format($region['tree_count']); ?>그루</td>
-                        <td><?php echo htmlspecialchars($region['creator_name'] ?? '-'); ?></td>
+                        
+                        <td><?php echo htmlspecialchars(isset($region['creator_name']) ? $region['creator_name'] : '-'); ?></td>
+                        
                         <td><?php echo date('Y-m-d', strtotime($region['created_at'])); ?></td>
                         <td>
                             <a href="edit.php?id=<?php echo $region['region_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
