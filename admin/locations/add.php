@@ -1,7 +1,9 @@
 <?php
 require_once '../../config/config.php';
+require_once '../../config/kakao_map.php';
 require_once '../../includes/auth.php';
 checkAuth();
+
 
 $page_title = '새 장소 추가';
 require_once '../../includes/header.php';
