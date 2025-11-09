@@ -4,7 +4,6 @@ require_once '../../config/kakao_map.php';
 require_once '../../includes/auth.php';
 checkAuth();
 
-
 $page_title = '새 장소 추가';
 require_once '../../includes/header.php';
 
@@ -29,17 +28,17 @@ $categories = $categories_stmt->fetchAll();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $region_id = (int)$_POST['region_id'];
     $category_id = (int)$_POST['category_id'];
-    $location_name = sanitize_input($_POST['location_name']);
-    $address = sanitize_input($_POST['address']);
+    $location_name = sanitize($_POST['location_name']);
+    $address = sanitize($_POST['address']);
     $latitude = !empty($_POST['latitude']) ? (float)$_POST['latitude'] : null;
     $longitude = !empty($_POST['longitude']) ? (float)$_POST['longitude'] : null;
     $area = !empty($_POST['area']) ? (float)$_POST['area'] : null;
     $length = !empty($_POST['length']) ? (float)$_POST['length'] : null;
     $width = !empty($_POST['width']) ? (float)$_POST['width'] : null;
     $establishment_year = !empty($_POST['establishment_year']) ? (int)$_POST['establishment_year'] : null;
-    $management_agency = sanitize_input($_POST['management_agency']);
-    $video_url = sanitize_input($_POST['video_url']);
-    $description = sanitize_input($_POST['description']);
+    $management_agency = sanitize($_POST['management_agency']);
+    $video_url = sanitize($_POST['video_url']);
+    $description = sanitize($_POST['description']);
     
     if (empty($location_name) || $region_id == 0 || $category_id == 0) {
         $error = '필수 항목을 모두 입력해주세요.';
