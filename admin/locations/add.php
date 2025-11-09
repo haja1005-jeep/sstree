@@ -1,4 +1,8 @@
 <?php
+require_once '../../config/config.php';
+require_once '../../includes/auth.php';
+checkAuth();
+
 $page_title = '새 장소 추가';
 require_once '../../includes/header.php';
 
@@ -144,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $db->commit();
             
-            redirect(SITE_URL . '/admin/locations/view.php?id=' . $location_id);
+            redirect(BASE_URL . '/admin/locations/view.php?id=' . $location_id);
         } catch (Exception $e) {
             $db->rollBack();
             $error = '장소 추가 중 오류가 발생했습니다: ' . $e->getMessage();
