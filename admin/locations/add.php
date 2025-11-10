@@ -422,7 +422,12 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
 ?>
 
 <?php if ($apiKey != ''): ?>
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?php echo $apiKey; ?>"></script>
+
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?php echo $apiKey; ?>&libraries=services"></script>
+
+	<script src="<?php echo BASE_URL; ?>/assets/js/kakao_map.js"></script>
+
+
     <script>
     // 카테고리별 동적 필드 표시
     function updateDynamicFields() {
@@ -438,29 +443,9 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
             document.getElementById('width-field').classList.add('active');
         }
     }
+
     document.getElementById('category_id').addEventListener('change', updateDynamicFields);
     document.addEventListener('DOMContentLoaded', updateDynamicFields); 
-
-    // 카카오맵 초기화
-    const mapContainer = document.getElementById('map');
-    const defaultLat = <?php echo defined('DEFAULT_LAT') ? DEFAULT_LAT : '34.8194'; ?>;
-    const defaultLng = <?php echo defined('DEFAULT_LNG') ? DEFAULT_LNG : '126.3794'; ?>;
-    let currentLat = document.getElementById('latitude').value || defaultLat;
-    let currentLng = document.getElementById('longitude').value || defaultLng;
-    let zoomLevel = (document.getElementById('latitude').value) ? 5 : 9; 
-    const mapOption = { center: new kakao.maps.LatLng(currentLat, currentLng), level: zoomLevel };
-    const map = new kakao.maps.Map(mapContainer, mapOption);
-    let marker = null;
-    if (document.getElementById('latitude').value && document.getElementById('longitude').value) {
-        marker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(currentLat, currentLng), map: map });
-    }
-    kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-        const latlng = mouseEvent.latLng;
-        if (marker) marker.setMap(null);
-        marker = new kakao.maps.Marker({ position: latlng, map: map });
-        document.getElementById('latitude').value = latlng.getLat();
-        document.getElementById('longitude').value = latlng.getLng();
-    });
 
     // 이미지 미리보기
     function previewImages(input) {
@@ -493,11 +478,49 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
             reader.readAsDataURL(input.files[0]);
         }
     }
+
+
+// (카카오맵 초기화 로직은 그대로 둡니다)
+    const mapContainer = document.getElementById('map');
+    const defaultLat = <?php echo defined('DEFAULT_LAT') ? DEFAULT_LAT : '34.8194'; ?>;
+    const defaultLng = <?php echo defined('DEFAULT_LNG') ? DEFAULT_LNG : '126.3794'; ?>;
+    let currentLat = document.getElementById('latitude').value || defaultLat;
+    let currentLng = document.getElementById('longitude').value || defaultLng;
+    let zoomLevel = (document.getElementById('latitude').value) ? 5 : 9; 
+    const mapOption = { center: new kakao.maps.LatLng(currentLat, currentLng), level: zoomLevel };
+    const map = new kakao.maps.Map(mapContainer, mapOption);
+    let marker = null;
+    if (document.getElementById('latitude').value && document.getElementById('longitude').value) {
+        marker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(currentLat, currentLng), map: map });
+    }
+
+    // [수정 3] 지도 클릭 이벤트 (역지오코딩 기능 추가)
+    kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+        const latlng = mouseEvent.latLng;
+        if (marker) marker.setMap(null);
+        marker = new kakao.maps.Marker({ position: latlng, map: map });
+        
+        // 1. 좌표 입력
+        document.getElementById('latitude').value = latlng.getLat();
+        document.getElementById('longitude').value = latlng.getLng();
+
+		
+        
+        // 2. [기능 추가] kakao_map.js의 헬퍼 함수 호출
+        searchCoordinateToAddress(latlng.getLat(), latlng.getLng(), function(result) {
+	
+            if (result.success) {
+                // 도로명 주소가 있으면 도로명, 없으면 지번 주소
+                const addressValue = result.roadAddress ? result.roadAddress : result.address;
+                document.getElementById('address').value = addressValue;
+            } else {
+                console.warn("역지오코딩 실패: " + result.message);
+            }
+        });
+    });
+
     </script>
 <?php else: ?>
-    <div class="alert alert-error">
-        카카오맵 API 키가 설정되지 않았습니다. config/kakao_map.php 파일을 확인하세요.
-    </div>
-<?php endif; ?>
+    <?php endif; ?>
 
 <?php include '../../includes/footer.php'; ?>

@@ -487,7 +487,12 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
 ?>
 
 <?php if ($apiKey != ''): ?>
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?php echo $apiKey; ?>"></script>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?php echo $apiKey; ?>&libraries=services"></script>
+
+	<script src="<?php echo BASE_URL; ?>/assets/js/kakao_map.js"></script>
+
+
+
     <script>
     function updateDynamicFields() {
         const categorySelect = document.getElementById('category_id');
@@ -517,12 +522,29 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
     if (<?php echo !empty($location['latitude']) ? 'true' : 'false'; ?>) {
         marker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(currentLat, currentLng), map: map });
     }
+
+
+    // [수정 3] 지도 클릭 이벤트 (역지오코딩 기능 추가)
     kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
         const latlng = mouseEvent.latLng;
         if (marker) marker.setMap(null);
         marker = new kakao.maps.Marker({ position: latlng, map: map });
+        
+        // 1. 좌표 입력
         document.getElementById('latitude').value = latlng.getLat();
         document.getElementById('longitude').value = latlng.getLng();
+
+        // 2. [기능 추가] kakao_map.js의 헬퍼 함수 호출
+        searchCoordinateToAddress(latlng.getLat(), latlng.getLng(), function(result) {
+	
+            if (result.success) {
+                // 도로명 주소가 있으면 도로명, 없으면 지번 주소
+                const addressValue = result.roadAddress ? result.roadAddress : result.address;
+                document.getElementById('address').value = addressValue;
+            } else {
+                console.warn("역지오코딩 실패: " + result.message);
+            }
+        });
     });
 
     function previewImages(input) {

@@ -172,9 +172,18 @@ $tree_count = $tree_stmt->fetch()['tree_count'];
 }
 </style>
 
-<div style="display: flex; gap: 10px; margin-bottom: 20px;">
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
     <a href="list.php" class="btn btn-secondary">← 목록으로</a>
     <a href="edit.php?id=<?php echo $location_id; ?>" class="btn btn-primary">수정</a>
+    
+    <?php if ($location['latitude'] && $location['longitude']): ?>
+        <a href="https://map.kakao.com/link/to/<?php echo urlencode($location['location_name']); ?>,<?php echo $location['latitude']; ?>,<?php echo $location['longitude']; ?>" 
+           target="_blank" 
+           class="btn" 
+           style="background-color: #FEE500; color: #191919; font-weight: 500;">
+            🗺️ 카카오 길찾기
+        </a>
+    <?php endif; ?>
     <?php if (isAdmin()): ?>
         <a href="list.php?delete=<?php echo $location_id; ?>" 
            class="btn btn-danger" 
