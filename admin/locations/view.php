@@ -12,7 +12,7 @@ $db = $database->getConnection();
 
 // 장소 ID 확인
 if (!isset($_GET['id'])) {
-    redirect(SITE_URL . '/admin/locations/list.php');
+    redirect(BASE_URL . '/admin/locations/list.php');
 }
 
 $location_id = (int)$_GET['id'];
@@ -29,7 +29,7 @@ $stmt->execute();
 $location = $stmt->fetch();
 
 if (!$location) {
-    redirect(SITE_URL . '/admin/locations/list.php');
+    redirect(BASE_URL . '/admin/locations/list.php');
 }
 
 // 사진 목록 조회
@@ -267,8 +267,8 @@ $tree_count = $tree_stmt->fetch()['tree_count'];
         <div class="card-body">
             <div class="photo-gallery">
                 <?php foreach ($regular_photos as $photo): ?>
-                    <div class="photo-item" onclick="openLightbox('<?php echo SITE_URL . '/' . $photo['file_path']; ?>')">
-                        <img src="<?php echo SITE_URL . '/' . $photo['file_path']; ?>" 
+                    <div class="photo-item" onclick="openLightbox('<?php echo BASE_URL . '/' . $photo['file_path']; ?>')">
+                        <img src="<?php echo BASE_URL . '/' . $photo['file_path']; ?>" 
                              alt="<?php echo htmlspecialchars($photo['file_name']); ?>">
                     </div>
                 <?php endforeach; ?>
@@ -286,8 +286,8 @@ $tree_count = $tree_stmt->fetch()['tree_count'];
         <div class="card-body">
             <div class="photo-gallery">
                 <?php foreach ($vr_photos as $photo): ?>
-                    <div class="photo-item" onclick="openLightbox('<?php echo SITE_URL . '/' . $photo['file_path']; ?>')">
-                        <img src="<?php echo SITE_URL . '/' . $photo['file_path']; ?>" 
+                    <div class="photo-item" onclick="openLightbox('<?php echo BASE_URL . '/' . $photo['file_path']; ?>')">
+                        <img src="<?php echo BASE_URL . '/' . $photo['file_path']; ?>" 
                              alt="360 VR Photo">
                         <div class="vr-badge">360° VR</div>
                     </div>

@@ -27,7 +27,7 @@ if (isset($_GET['delete']) && isAdmin()) {
         $photos = $photo_stmt->fetchAll();
         
         foreach ($photos as $photo) {
-            $file_path = ROOT_PATH . '/' . $photo['file_path'];
+            $file_path = BASE_PATH . '/' . $photo['file_path'];
             if (file_exists($file_path)) {
                 unlink($file_path);
             }

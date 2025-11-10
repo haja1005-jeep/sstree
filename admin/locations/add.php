@@ -30,69 +30,41 @@ $allowed_ext_array = is_array(ALLOWED_EXTENSIONS) ? ALLOWED_EXTENSIONS : explode
 function processAndSaveImage($source_path, $destination_path, $max_width = 1920, $quality = 85) {
     try {
         $info = getimagesize($source_path);
-        if (!$info) return false; // 이미지 파일이 아닌 경우
-
+        if (!$info) return false;
         $mime = $info['mime'];
         $width = $info[0];
         $height = $info[1];
-
-        // 최대 가로 크기보다 작으면 리사이징 안함 (원본 크기 유지)
         if ($width <= $max_width) {
             $new_width = $width;
             $new_height = $height;
         } else {
             $new_width = $max_width;
-            $new_height = ($height / $width) * $new_width;
+            $new_height = (int)(($height / $width) * $new_width);
         }
-
-        $destination_image = imagecreatetruecolor($new_width, $new_height);
-
-        // 원본 이미지 로드
+        $destination_image = imagecreatetruecolor((int)$new_width, (int)$new_height);
         switch ($mime) {
-            case 'image/jpeg':
-                $source_image = imagecreatefromjpeg($source_path);
-                break;
-            case 'image/png':
-                $source_image = imagecreatefrompng($source_path);
-                imagealphablending($destination_image, false); // PNG 투명도 보존
+            case 'image/jpeg': $source_image = imagecreatefromjpeg($source_path); break;
+            case 'image/png': 
+                $source_image = imagecreatefrompng($source_path); 
+                imagealphablending($destination_image, false);
                 imagesavealpha($destination_image, true);
                 break;
-            case 'image/gif':
-                $source_image = imagecreatefromgif($source_path);
-                break;
+            case 'image/gif': $source_image = imagecreatefromgif($source_path); break;
             default:
-                // 지원하지 않는 형식이면 그냥 원본 파일 이동 (리사이징 안함)
                 imagedestroy($destination_image);
                 return move_uploaded_file($source_path, $destination_path);
         }
-
-        // 리샘플링 (이미지 복사 및 크기 조절)
         imagecopyresampled($destination_image, $source_image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-
-        // 파일 저장
         $success = false;
         switch ($mime) {
-            case 'image/jpeg':
-                $success = imagejpeg($destination_image, $destination_path, $quality);
-                break;
-            case 'image/png':
-                // PNG 압축 레벨 (0=무압축, 9=최대압축) / 품질을 압축 레벨로 변환 (85 -> 1.5 -> 1 -> 8)
-                $png_quality = 8; 
-                $success = imagepng($destination_image, $destination_path, $png_quality);
-                break;
-            case 'image/gif':
-                $success = imagegif($destination_image, $destination_path);
-                break;
+            case 'image/jpeg': $success = imagejpeg($destination_image, $destination_path, $quality); break;
+            case 'image/png': $success = imagepng($destination_image, $destination_path, 8); break;
+            case 'image/gif': $success = imagegif($destination_image, $destination_path); break;
         }
-
-        // 메모리 해제
         imagedestroy($source_image);
         imagedestroy($destination_image);
-
         return $success;
-
     } catch (Exception $e) {
-        // GD 라이브러리 오류 시
         return false;
     }
 }
@@ -102,6 +74,7 @@ function processAndSaveImage($source_path, $destination_path, $max_width = 1920,
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $region_id = (int)$_POST['region_id'];
     $category_id = (int)$_POST['category_id'];
+    // ... (폼 데이터 가져오기) ...
     $location_name = sanitize($_POST['location_name']);
     $address = sanitize($_POST['address']);
     $latitude = !empty($_POST['latitude']) ? (float)$_POST['latitude'] : null;
@@ -125,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       VALUES (:region_id, :category_id, :location_name, :address, :latitude, :longitude, 
                               :area, :length, :width, :establishment_year, :management_agency, :video_url, :description, NOW())";
             $stmt = $db->prepare($query);
-            // ... (bindParam 생략 - 위 코드와 동일) ...
+            // ... (bindParam 생략) ...
             $stmt->bindParam(':region_id', $region_id);
             $stmt->bindParam(':category_id', $category_id);
             $stmt->bindParam(':location_name', $location_name);
@@ -143,74 +116,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $location_id = $db->lastInsertId();
             
-            // --- 일반 이미지 업로드 처리 (리사이징 적용) ---
+            // --- [수정] 파일 업로드 (오류 알림 추가) ---
+            $upload_error = false;
+            $max_mb = MAX_FILE_SIZE / 1024 / 1024; // MB 단위
+            $allowed_ext_str = implode(', ', $allowed_ext_array);
+            
+            // 일반 이미지 업로드
             if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
                 $upload_dir = UPLOAD_PATH;
                 if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                 
                 $sort_order = 1;
                 foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
-                    if (!empty($tmp_name) && $_FILES['images']['error'][$key] === UPLOAD_ERR_OK) {
-                        $file_name = $_FILES['images']['name'][$key];
-                        $file_size = $_FILES['images']['size'][$key];
-                        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-                        
-                        // [오류 수정] $allowed_ext_array 사용
-                        if (in_array($file_ext, $allowed_ext_array) && $file_size <= MAX_FILE_SIZE) {
-                            $new_file_name = 'location_' . $location_id . '_' . time() . '_' . $sort_order . '.' . $file_ext;
-                            $file_path = $upload_dir . $new_file_name;
-                            
-                            // [기능 변경] move_uploaded_file 대신 processAndSaveImage 사용
-                            if (processAndSaveImage($tmp_name, $file_path, 1920, 85)) { // 가로 1920px, 품질 85
-                                $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, 
-                                                                             photo_type, sort_order, uploaded_by, uploaded_at) 
-                                               VALUES (:location_id, :file_path, :file_name, :file_size, 
-                                                       'image', :sort_order, :uploaded_by, NOW())";
-                                $photo_stmt = $db->prepare($photo_query);
-                                $relative_path = 'uploads/photos/' . $new_file_name;
-                                $photo_stmt->bindParam(':location_id', $location_id);
-                                $photo_stmt->bindParam(':file_path', $relative_path);
-                                $photo_stmt->bindParam(':file_name', $file_name);
-                                $photo_stmt->bindParam(':file_size', filesize($file_path)); // [수정] 원본 크기 대신 압축된 파일 크기
-                                $photo_stmt->bindParam(':sort_order', $sort_order);
-                                $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
-                                $photo_stmt->execute();
-                                $sort_order++;
-                            }
-                        }
+                    if (empty($tmp_name) || $_FILES['images']['error'][$key] !== UPLOAD_ERR_OK) {
+                        continue;
                     }
-                }
+                    
+                    $file_name = $_FILES['images']['name'][$key];
+                    $file_size = $_FILES['images']['size'][$key];
+                    $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+                    
+                    if (!in_array($file_ext, $allowed_ext_array)) {
+                        $error .= "{$file_name}: 허용되지 않는 파일 형식입니다. ({$allowed_ext_str}만 가능)<br>";
+                        $upload_error = true;
+                    } elseif ($file_size > MAX_FILE_SIZE) {
+                        $error .= "{$file_name}: 파일 용량이 너무 큽니다. ({$max_mb}MB 이하만 가능)<br>";
+                        $upload_error = true;
+                    } else {
+						
+					 $temp_dest_path = UPLOAD_PATH . 'temp_file';
+
+					 if (processAndSaveImage($tmp_name, $temp_dest_path, 1920, 85)) { 
+                            $new_file_name = 'location_' . $location_id . '_' . time() . '_' . $sort_order . '.' . $file_ext;
+                            $file_path = UPLOAD_PATH . $new_file_name;
+                            rename($temp_dest_path, $file_path); // [수정] 변수 사용
+					
+		                 // DB 저장
+                        $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, photo_type, sort_order, uploaded_by, uploaded_at) VALUES (:location_id, :file_path, :file_name, :file_size, 'image', :sort_order, :uploaded_by, NOW())";
+                        $photo_stmt = $db->prepare($photo_query);
+                        $relative_path = 'uploads/photos/' . $new_file_name;
+                        $photo_stmt->bindParam(':location_id', $location_id);
+                        $photo_stmt->bindParam(':file_path', $relative_path);
+                        $photo_stmt->bindParam(':file_name', $file_name);
+
+                        $compressed_size = filesize($file_path); // [수정] 파일 크기를 변수에 먼저 할당
+                        $photo_stmt->bindParam(':file_size', $compressed_size); // [수정] 변수 전달
+
+                        $photo_stmt->bindParam(':sort_order', $sort_order);
+                        $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
+                        $photo_stmt->execute();
+                        $sort_order++;
+                    } else {
+                        $error .= "{$file_name}: 파일 저장(압축) 중 오류가 발생했습니다.<br>";
+                        $upload_error = true;
+                    }
+				}
+
+			  }
             }
             
-            // --- 360 VR 사진 업로드 처리 (리사이징 적용) ---
+            // 360 VR 사진 업로드
             if (isset($_FILES['vr_photo']) && !empty($_FILES['vr_photo']['tmp_name'])) {
                 if ($_FILES['vr_photo']['error'] === UPLOAD_ERR_OK) {
                     $file_name = $_FILES['vr_photo']['name'];
                     $file_size = $_FILES['vr_photo']['size'];
                     $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-                    
-                    // [오류 수정] $allowed_ext_array 사용
-                    if (in_array($file_ext, $allowed_ext_array) && $file_size <= MAX_FILE_SIZE) {
-                        $new_file_name = 'location_vr_' . $location_id . '_' . time() . '.' . $file_ext;
-                        $file_path = UPLOAD_PATH . $new_file_name;
-                        
-                        // [기능 변경] VR 사진은 더 큰 해상도(4096px)와 품질(90) 유지
-                        if (processAndSaveImage($_FILES['vr_photo']['tmp_name'], $file_path, 4096, 90)) {
-                            $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, 
-                                                                         photo_type, uploaded_by, uploaded_at) 
-                                           VALUES (:location_id, :file_path, :file_name, :file_size, 
-                                                   'vr360', :uploaded_by, NOW())";
-                            $photo_stmt = $db->prepare($photo_query);
-                            $relative_path = 'uploads/photos/' . $new_file_name;
-                            $photo_stmt->bindParam(':location_id', $location_id);
-                            $photo_stmt->bindParam(':file_path', $relative_path);
-                            $photo_stmt->bindParam(':file_name', $file_name);
-                            $photo_stmt->bindParam(':file_size', filesize($file_path)); // [수정] 압축된 파일 크기
-                            $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
-                            $photo_stmt->execute();
-                        }
+
+                    if (!in_array($file_ext, $allowed_ext_array)) {
+                        $error .= "{$file_name} (VR): 허용되지 않는 파일 형식입니다.<br>";
+                        $upload_error = true;
+                    } elseif ($file_size > MAX_FILE_SIZE) {
+                        $error .= "{$file_name} (VR): 파일 용량이 너무 큽니다. ({$max_mb}MB 이하)<br>";
+                        $upload_error = true;
+                    } else {
+                     
+					 $temp_vr_dest_path = UPLOAD_PATH . 'temp_vr_file';
+
+
+                     if (processAndSaveImage($_FILES['vr_photo']['tmp_name'], $temp_vr_dest_path, 4096, 90)) {
+                            $new_file_name = 'location_vr_' . $location_id . '_' . time() . '.' . $file_ext;
+                            $file_path = UPLOAD_PATH . $new_file_name;
+                            rename($temp_vr_dest_path, $file_path); // [수정] 변수 사용
+					 
+
+                        // DB 저장
+                        $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, photo_type, uploaded_by, uploaded_at) VALUES (:location_id, :file_path, :file_name, :file_size, 'vr360', :uploaded_by, NOW())";
+                        $photo_stmt = $db->prepare($photo_query);
+                        $relative_path = 'uploads/photos/' . $new_file_name;
+                        $photo_stmt->bindParam(':location_id', $location_id);
+                        $photo_stmt->bindParam(':file_path', $relative_path);
+                        $photo_stmt->bindParam(':file_name', $file_name);
+
+                        $vr_compressed_size = filesize($file_path); // [수정] 파일 크기를 변수에 먼저 할당
+                        $photo_stmt->bindParam(':file_size', $vr_compressed_size); // [수정] 변수 전달
+
+                        $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
+                        $photo_stmt->execute();
+                    } else {
+                        $error .= "{$file_name} (VR): 파일 저장(압축) 중 오류가 발생했습니다.<br>";
+                        $upload_error = true;
                     }
-                }
+				}
+
+				}
+            }
+            
+            // [수정] 업로드 오류가 발생했다면, DB 변경사항을 롤백하고 에러 메시지 표시
+            if ($upload_error) {
+                throw new Exception("파일 업로드 실패:<br>" . $error);
             }
             
             // 로그 기록
@@ -218,12 +231,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $db->commit();
             
-            // 5. [오류 수정] 리다이렉트 (이제 header() 오류 없이 실행됨)
+            // 5. 리다이렉트
             redirect('/admin/locations/view.php?id=' . $location_id . '&message=' . urlencode('장소가 추가되었습니다.'));
             
         } catch (Exception $e) {
-            $db->rollBack();
-            $error = '장소 추가 중 오류가 발생했습니다: ' . $e->getMessage();
+            $db->rollBack(); // 롤백
+            $error = $e->getMessage(); // $error 변수에 오류 메시지를 담음
         }
     }
 }
