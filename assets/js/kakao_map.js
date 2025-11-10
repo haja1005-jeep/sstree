@@ -3,7 +3,7 @@
  * Smart Tree Map - Sinan County
  */
 
-let map;
+//let map;
 let markers = [];
 let infowindow;
 
