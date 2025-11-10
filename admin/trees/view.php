@@ -232,6 +232,12 @@ $health_colors = [
 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
     <a href="list.php" class="btn btn-secondary">← 목록으로</a>
     <a href="edit.php?id=<?php echo $tree_id; ?>" class="btn btn-primary">수정</a>
+	<?php if ($tree['latitude'] && $tree['longitude']): ?>
+        <a href="https://map.kakao.com/link/to/<?php echo urlencode($tree['tree_number'] ?: $tree['species_name']); ?>,<?php echo $tree['latitude']; ?>,<?php echo $tree['longitude']; ?>" 
+           target="_blank" class="btn" style="background-color: #FEE500; color: #191919; font-weight: 500;">
+            🗺️ 카카오 길찾기
+        </a>
+    <?php endif; ?>
     <?php if (isAdmin()): ?>
         <a href="list.php?delete=<?php echo $tree_id; ?>" 
            class="btn btn-danger" 
