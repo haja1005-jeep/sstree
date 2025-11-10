@@ -220,7 +220,7 @@ require_once '../../includes/header.php';
                                 </td>
                                 <td><?php echo date('Y-m-d', strtotime($location['created_at'])); ?></td>
                                 <td>
-                                    <a href="view.php?id=<?php echo $location['location_id']; ?>" class="btn btn-sm btn-info">보기</a>
+                                    <a href="view.php?id=<?php echo $location['location_id']; ?>" class="btn btn-sm btn-success">보기</a>
                                     <a href="edit.php?id=<?php echo $location['location_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
                                     <?php if (isAdmin()): ?>
                                         <a href="?delete=<?php echo $location['location_id']; ?>" 
@@ -258,3 +258,4 @@ require_once '../../includes/header.php';
 </div>
 
 <?php require_once '../../includes/footer.php'; ?>
+
