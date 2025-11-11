@@ -170,7 +170,15 @@ require_once '../../includes/header.php';
     <div class="card-header">
         <h3 class="card-title">장소 목록 (총 <?php echo count($locations); ?>개)</h3>
         <a href="add.php" class="btn btn-primary">➕ 새 장소 추가</a>
+        <a href="#" onclick="exportLocations()" class="btn btn-success">📥 엑셀 내보내기</a>
     </div>
+	<!--
+    <div>
+        <button type="button" class="btn btn-success" onclick="exportLocations()" style="background: #10b981; border: none; cursor: pointer;">
+            <i class="icon">📥</i> 엑셀 다운로드
+        </button>
+    </div>-->
+
     <div class="card-body">
         <div class="table-wrapper">
             <table>
@@ -256,5 +264,18 @@ require_once '../../includes/header.php';
         </ul>
     </div>
 </div>
+
+
+<script>
+function exportLocations() {
+    const params = new URLSearchParams(window.location.search);
+    const exportUrl = '../export/locations.php?' + params.toString();
+    
+    const filterText = params.toString() ? '현재 필터 조건으로' : '전체';
+    if (confirm(filterText + ' 장소 데이터를 엑셀로 내보내시겠습니까?')) {
+        window.location.href = exportUrl;
+    }
+}
+</script>
 
 <?php require_once '../../includes/footer.php'; ?>

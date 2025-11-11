@@ -1,4 +1,5 @@
 <?php
+<?php
 /**
  * 통계 대시보드
  * Smart Tree Map - Sinan County
@@ -14,133 +15,165 @@ $page_title = '통계 대시보드';
 $database = new Database();
 $db = $database->getConnection();
 
-// 기간 필터
-$period = isset($_GET['period']) ? sanitize($_GET['period']) : '30days';
+// ---- 기간 해석
+$period = $_GET['period'] ?? '30days';
+$period_label = '최근 30일';
 
-$date_filter = '';
 switch ($period) {
-    case '7days':
-        $date_filter = "AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
-        $period_label = '최근 7일';
-        break;
-    case '30days':
-        $date_filter = "AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
-        $period_label = '최근 30일';
-        break;
-    case '90days':
-        $date_filter = "AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
-        $period_label = '최근 90일';
-        break;
-    case '1year':
-        $date_filter = "AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)";
-        $period_label = '최근 1년';
-        break;
-    case 'all':
-        $date_filter = "";
-        $period_label = '전체 기간';
-        break;
-    default:
-        $date_filter = "AND DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
-        $period_label = '최근 30일';
+    case '7days':  $interval = '7 DAY';   $period_label = '최근 7일';  break;
+    case '30days': $interval = '30 DAY';  $period_label = '최근 30일'; break;
+    case '90days': $interval = '90 DAY';  $period_label = '최근 90일'; break;
+    case '1year':  $interval = '1 YEAR';  $period_label = '최근 1년';  break;
+    case 'all':    $interval = null;      $period_label = '전체 기간';  break;
+    default:       $interval = '30 DAY';  $period_label = '최근 30일';
 }
 
-// 전체 통계
+// ---- 유틸: 테이블에 특정 컬럼이 있는지 확인
+function hasColumn(PDO $db, string $table, string $column): bool {
+    $sql = "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c";
+    $stmt = $db->prepare($sql);
+    $stmt->execute([':t' => $table, ':c' => $column]);
+    return (bool)$stmt->fetchColumn();
+}
+
+// ---- 유틸: 테이블별 날짜 필터 생성 (후보 컬럼 중 존재하는 첫 번째 사용)
+function buildDateFilter(PDO $db, string $table, array $candidates, ?string $interval): string {
+    if ($interval === null) return ''; // 전체 기간
+    foreach ($candidates as $col) {
+        if (hasColumn($db, $table, $col)) {
+            return " AND DATE(`$col`) >= DATE_SUB(CURDATE(), INTERVAL $interval) ";
+        }
+    }
+    // 후보가 하나도 없으면 해당 테이블은 필터 생략
+    return '';
+}
+
+// ---- 테이블별 후보 날짜 컬럼 정의
+$treesDateFilter     = buildDateFilter($db, 'trees',       ['created_at','registered_at','updated_at','inserted_at'], $interval);
+$speciesDateFilter   = $treesDateFilter; // 수종 수는 trees의 레코드 생성 시점을 기준으로 필터
+$locationsDateFilter = buildDateFilter($db, 'locations',   ['created_at','registered_at','established_at','updated_at'], $interval);
+$photosDateFilter    = buildDateFilter($db, 'tree_photos', ['uploaded_at','created_at','captured_at','updated_at'], $interval);
+
+// ---- 전체 통계
 $stats = [];
 
 // 총 나무 수
-$treeQuery = "SELECT COUNT(*) as total FROM trees WHERE 1=1 {$date_filter}";
-$treeStmt = $db->query($treeQuery);
-$stats['total_trees'] = $treeStmt->fetch()['total'];
+$treeQuery = "SELECT COUNT(*) AS total FROM trees WHERE 1=1 $treesDateFilter";
+$stats['total_trees'] = (int)$db->query($treeQuery)->fetch()['total'];
 
-// 총 수종 수
-$speciesQuery = "SELECT COUNT(DISTINCT species_id) as total FROM trees WHERE species_id IS NOT NULL {$date_filter}";
-$speciesStmt = $db->query($speciesQuery);
-$stats['total_species'] = $speciesStmt->fetch()['total'];
+// 총 수종 수 (trees 기준으로 DISTINCT species_id)
+$speciesQuery = "SELECT COUNT(DISTINCT species_id) AS total FROM trees WHERE species_id IS NOT NULL $speciesDateFilter";
+$stats['total_species'] = (int)$db->query($speciesQuery)->fetch()['total'];
 
 // 총 장소 수
-$locationQuery = "SELECT COUNT(*) as total FROM locations WHERE 1=1 {$date_filter}";
-$locationStmt = $db->query($locationQuery);
-$stats['total_locations'] = $locationStmt->fetch()['total'];
+$locationQuery = "SELECT COUNT(*) AS total FROM locations WHERE 1=1 $locationsDateFilter";
+$stats['total_locations'] = (int)$db->query($locationQuery)->fetch()['total'];
 
-// 총 사진 수 (tree_photos는 uploaded_at 사용)
-$photo_date_filter = str_replace('created_at', 'uploaded_at', $date_filter);
-$photoQuery = "SELECT COUNT(*) as total FROM tree_photos WHERE 1=1 {$photo_date_filter}";
-$photoStmt = $db->query($photoQuery);
-$stats['total_photos'] = $photoStmt->fetch()['total'];
+// 총 사진 수 (tree_photos는 uploaded_at 등으로 필터)
+$photoQuery = "SELECT COUNT(*) AS total FROM tree_photos WHERE 1=1 $photosDateFilter";
+$stats['total_photos'] = (int)$db->query($photoQuery)->fetch()['total'];
+
+// period_label은 그대로 사용
+
 
 // 지역별 나무 현황
-$tree_date_filter = str_replace('created_at', 't.created_at', $date_filter);
-$regionStatsQuery = "SELECT r.region_name, COUNT(t.tree_id) as tree_count
-                     FROM regions r
-                     LEFT JOIN trees t ON r.region_id = t.region_id
-                     WHERE 1=1 {$tree_date_filter}
-                     GROUP BY r.region_id, r.region_name
-                     ORDER BY tree_count DESC";
-$regionStatsStmt = $db->query($regionStatsQuery);
-$region_stats = $regionStatsStmt->fetchAll();
+$regionStatsQuery = "
+  SELECT r.region_name, COUNT(t.tree_id) AS tree_count
+  FROM regions r
+  LEFT JOIN trees t
+    ON r.region_id = t.region_id
+    $treesOnDate
+  GROUP BY r.region_id, r.region_name
+  ORDER BY tree_count DESC";
+$region_stats = $db->query($regionStatsQuery)->fetchAll();
+
 
 // 수종별 나무 현황 (상위 10개)
-$speciesStatsQuery = "SELECT s.korean_name, s.scientific_name, COUNT(t.tree_id) as tree_count
-                      FROM tree_species_master s
-                      LEFT JOIN trees t ON s.species_id = t.species_id
-                      WHERE t.tree_id IS NOT NULL {$tree_date_filter}
-                      GROUP BY s.species_id, s.korean_name, s.scientific_name
-                      ORDER BY tree_count DESC
-                      LIMIT 10";
-$speciesStatsStmt = $db->query($speciesStatsQuery);
-$species_stats = $speciesStatsStmt->fetchAll();
+$speciesStatsQuery = "
+  SELECT s.korean_name, s.scientific_name, COUNT(t.tree_id) AS tree_count
+  FROM tree_species_master s
+  LEFT JOIN trees t
+    ON s.species_id = t.species_id
+    $treesOnDate
+  GROUP BY s.species_id, s.korean_name, s.scientific_name
+  ORDER BY tree_count DESC
+  LIMIT 10";
+$species_stats = $db->query($speciesStatsQuery)->fetchAll();
+
 
 // 건강상태별 나무 현황
-$healthStatsQuery = "SELECT 
-                         health_status,
-                         COUNT(*) as count,
-                         ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM trees WHERE 1=1 {$date_filter}), 1) as percentage
-                     FROM trees
-                     WHERE 1=1 {$date_filter}
-                     GROUP BY health_status
-                     ORDER BY 
-                         CASE health_status
-                             WHEN 'excellent' THEN 1
-                             WHEN 'good' THEN 2
-                             WHEN 'fair' THEN 3
-                             WHEN 'poor' THEN 4
-                             WHEN 'dead' THEN 5
-                         END";
-$healthStatsStmt = $db->query($healthStatsQuery);
-$health_stats = $healthStatsStmt->fetchAll();
+$healthStatsQuery = "
+  SELECT 
+    t.health_status,
+    COUNT(*) AS count,
+    ROUND(
+      COUNT(*) * 100.0 / NULLIF(
+        (SELECT COUNT(*) FROM trees t2 WHERE 1=1 $treesWhereDate),
+        0
+      ), 1
+    ) AS percentage
+  FROM trees t
+  WHERE 1=1 $treesWhereDate
+  GROUP BY t.health_status
+  ORDER BY 
+    CASE t.health_status
+      WHEN 'excellent' THEN 1
+      WHEN 'good' THEN 2
+      WHEN 'fair' THEN 3
+      WHEN 'poor' THEN 4
+      WHEN 'dead' THEN 5
+      ELSE 6
+    END";
+$health_stats = $db->query($healthStatsQuery)->fetchAll();
+
 
 // 카테고리별 장소 현황
-$location_date_filter = str_replace('created_at', 'l.created_at', $date_filter);
-$categoryStatsQuery = "SELECT c.category_name, COUNT(l.location_id) as location_count
-                       FROM categories c
-                       LEFT JOIN locations l ON c.category_id = l.category_id
-                       WHERE 1=1 {$location_date_filter}
-                       GROUP BY c.category_id, c.category_name
-                       ORDER BY location_count DESC";
-$categoryStatsStmt = $db->query($categoryStatsQuery);
-$category_stats = $categoryStatsStmt->fetchAll();
+$categoryStatsQuery = "
+  SELECT c.category_name, COUNT(l.location_id) AS location_count
+  FROM categories c
+  LEFT JOIN locations l
+    ON c.category_id = l.category_id
+    $locsOnDate
+  GROUP BY c.category_id, c.category_name
+  ORDER BY location_count DESC";
+$category_stats = $db->query($categoryStatsQuery)->fetchAll();
 
 // 월별 등록 추이 (최근 12개월)
-$monthlyStatsQuery = "SELECT 
-                          DATE_FORMAT(created_at, '%Y-%m') as month,
-                          COUNT(*) as count
-                      FROM trees
-                      WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-                      ORDER BY month ASC";
-$monthlyStatsStmt = $db->query($monthlyStatsQuery);
-$monthly_stats = $monthlyStatsStmt->fetchAll();
+// 월별 집계용으로 trees 날짜 컬럼 하나를 선택
+$treesMonthCol = $treesDateCol ?? (hasColumn($db,'trees','created_at') ? 'created_at' : null);
+if ($treesMonthCol === null) {
+  // 후보 더 시도
+  foreach (['registered_at','inserted_at','updated_at'] as $c) {
+    if (hasColumn($db,'trees',$c)) { $treesMonthCol = $c; break; }
+  }
+}
+if ($treesMonthCol) {
+  $monthlyStatsQuery = "
+    SELECT DATE_FORMAT(t.`$treesMonthCol`, '%Y-%m') AS month,
+           COUNT(*) AS count
+    FROM trees t
+    WHERE DATE(t.`$treesMonthCol`) >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(t.`$treesMonthCol`, '%Y-%m')
+    ORDER BY month ASC";
+  $monthly_stats = $db->query($monthlyStatsQuery)->fetchAll();
+} else {
+  $monthly_stats = []; // 날짜컬럼이 없으면 빈 배열
+}
+
 
 // 사용자별 활동 순위 (상위 10명)
-$userStatsQuery = "SELECT u.name, u.username, COUNT(t.tree_id) as tree_count
-                   FROM users u
-                   LEFT JOIN trees t ON u.user_id = t.created_by
-                   WHERE t.tree_id IS NOT NULL {$tree_date_filter}
-                   GROUP BY u.user_id, u.name, u.username
-                   ORDER BY tree_count DESC
-                   LIMIT 10";
-$userStatsStmt = $db->query($userStatsQuery);
-$user_stats = $userStatsStmt->fetchAll();
+$userStatsQuery = "
+  SELECT u.name, u.username, COUNT(t.tree_id) AS tree_count
+  FROM users u
+  LEFT JOIN trees t
+    ON u.user_id = t.created_by
+    $treesOnDate
+  GROUP BY u.user_id, u.name, u.username
+  ORDER BY tree_count DESC
+  LIMIT 10";
+$user_stats = $db->query($userStatsQuery)->fetchAll();
+
 
 $health_labels = [
     'excellent' => '최상',
@@ -235,15 +268,7 @@ include '../../includes/header.php';
 <div class="page-header">
     <h2>📊 통계 대시보드</h2>
     <div style="display: flex; gap: 10px;">
-        <a href="#" onclick="exportStatistics()" class="btn btn-success">📥 통계 엑셀 다운로드</a>
-<!--
-<div style="margin: 20px 0; text-align: right;">
-    <button type="button" class="btn btn-success" onclick="exportStatistics()" style="background: #10b981;">
-        <i class="icon">📥</i> 통계 엑셀 다운로드
-    </button>
-</div> -->
-
-
+        <a href="export.php" class="btn btn-success">📥 엑셀 내보내기</a>
         <button onclick="window.print()" class="btn btn-secondary">🖨️ 인쇄</button>
     </div>
 </div>
@@ -521,17 +546,5 @@ include '../../includes/header.php';
     </div>
 <?php endif; ?>
 
-
-<script>
-function exportStatistics() {
-    const period = '<?php echo $period; ?>';
-    const exportUrl = '../export/statistics.php?period=' + period;
-    
-    if (confirm('<?php echo $period_label; ?> 통계 데이터를 엑셀로 내보내시겠습니까?')) {
-        window.location.href = exportUrl;
-    }
-}
-</script>
-
-
 <?php include '../../includes/footer.php'; ?>
+

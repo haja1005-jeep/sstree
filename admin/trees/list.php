@@ -291,7 +291,15 @@ require_once '../../includes/header.php';
         <div style="display: flex; gap: 10px;">
             <a href="add.php" class="btn btn-primary">➕ 나무 추가</a>
             <a href="map.php" class="btn btn-success">🗺️ 지도 보기</a>
+            <a href="#" class="btn btn-success" onclick="exportToExcel()">📥 엑셀 내보내기</a>
+
+			<!-- 엑셀 다운로드 버튼
+            <button type="button" class="btn btn-success" onclick="exportToExcel()" style="background: #10b981;">
+                <i class="icon">📥</i> 엑셀 다운로드
+            </button>  -->
         </div>
+
+
     </div>
     <div class="card-body">
         <div class="table-wrapper">
@@ -415,5 +423,18 @@ require_once '../../includes/header.php';
         </ul>
     </div>
 </div>
+
+<script>
+function exportToExcel() {
+    // 현재 필터 조건 가져오기
+    const urlParams = new URLSearchParams(window.location.search);
+    const exportUrl = '../export/trees.php?' + urlParams.toString();
+    
+    // 확인 다이얼로그
+    if (confirm('현재 필터 조건으로 나무 데이터를 엑셀로 내보내시겠습니까?')) {
+        window.location.href = exportUrl;
+    }
+}
+</script>
 
 <?php require_once '../../includes/footer.php'; ?>
