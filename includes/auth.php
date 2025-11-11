@@ -4,7 +4,7 @@
  * Smart Tree Map - Sinan County
  */
 
-require_once __DIR__ . '/password.php';  //1108 새로 추가 : php 하위 버전
+//require_once __DIR__ . '/password.php';  //1108 새로 추가 : php 하위 버전
 
 require_once __DIR__ . '/../config/config.php';
 
@@ -103,4 +103,5 @@ function logActivity($userId, $action, $targetType, $targetId, $details) {
 function hashPassword($password) {
     return password_hash($password, PASSWORD_DEFAULT);
 }
+
 ?>
