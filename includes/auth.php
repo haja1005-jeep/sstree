@@ -1,8 +1,10 @@
-<?php
+﻿<?php
 /**
  * 인증 관련 함수
  * Smart Tree Map - Sinan County
  */
+
+require_once __DIR__ . '/password.php';  //1108 새로 추가 : php 하위 버전
 
 require_once __DIR__ . '/../config/config.php';
 
@@ -24,6 +26,8 @@ function checkAdmin() {
 
 // 사용자 로그인 처리
 function loginUser($username, $password) {
+
+
     $database = new Database();
     $db = $database->getConnection();
     
@@ -39,6 +43,8 @@ function loginUser($username, $password) {
         $user = $stmt->fetch();
         
         if (password_verify($password, $user['password'])) {
+
+
             // 세션 설정
             $_SESSION['user_id'] = $user['user_id'];
             $_SESSION['username'] = $user['username'];
