@@ -26,10 +26,19 @@
                 </a>
             </li>
             
+            <!-- 장소 관리 (구버전) -->
             <li>
-                <a href="<?php echo BASE_URL; ?>/admin/locations/list.php" class="<?php echo strpos($_SERVER['PHP_SELF'], '/locations/') !== false ? 'active' : ''; ?>">
+                <a href="<?php echo BASE_URL; ?>/admin/locations_old/list.php" class="<?php echo strpos($_SERVER['PHP_SELF'], '/locations_old/') !== false ? 'active' : ''; ?>">
                     <span class="icon">📍</span>
-                    <span class="text">장소 관리</span>
+                    <span class="text">장소 관리 (구)</span>
+                </a>
+            </li>
+            
+            <!-- 장소 관리 (신버전) - Phase 3 -->
+            <li>
+                <a href="<?php echo BASE_URL; ?>/admin/locations/index.php" class="<?php echo strpos($_SERVER['PHP_SELF'], '/locations/') !== false && strpos($_SERVER['PHP_SELF'], '/locations_old/') === false ? 'active' : ''; ?>" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 20%); color: white; font-weight: 600;">
+                    <span class="icon">✨</span>
+                    <span class="text">장소 관리 (신) 🆕</span>
                 </a>
             </li>
             
