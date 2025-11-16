@@ -1,7 +1,13 @@
 <?php
 /**
- * 나무 목록
+ * 나무 목록 (개선 버전)
  * Smart Tree Map - Sinan County
+ * 
+ * 개선사항:
+ * - 체크박스 선택 기능
+ * - 일괄 삭제 기능
+ * - 일괄 건강상태 변경
+ * - 나무 번호 중복 체크
  */
 
 require_once '../../config/config.php';
@@ -14,7 +20,88 @@ $page_title = '나무 관리';
 $database = new Database();
 $db = $database->getConnection();
 
-// 삭제 처리
+// 일괄 삭제 처리
+if (isset($_POST['bulk_delete']) && isset($_POST['selected_trees']) && isAdmin()) {
+    $selected_trees = $_POST['selected_trees'];
+    $delete_count = 0;
+    
+    try {
+        $db->beginTransaction();
+        
+        foreach ($selected_trees as $tree_id) {
+            $tree_id = (int)$tree_id;
+            
+            // 관련 사진 삭제
+            $photo_query = "SELECT file_path FROM tree_photos WHERE tree_id = :tree_id";
+            $photo_stmt = $db->prepare($photo_query);
+            $photo_stmt->bindParam(':tree_id', $tree_id);
+            $photo_stmt->execute();
+            $photos = $photo_stmt->fetchAll();
+            
+            foreach ($photos as $photo) {
+                $file_path = BASE_PATH . '/' . $photo['file_path'];
+                if (file_exists($file_path)) {
+                    @unlink($file_path);
+                }
+            }
+
+        // ⭐ DB에서 사진 레코드 삭제
+        $delete_photos_query = "DELETE FROM tree_photos WHERE tree_id = :tree_id";
+        $delete_photos_stmt = $db->prepare($delete_photos_query);
+        $delete_photos_stmt->bindParam(':tree_id', $tree_id);
+        $delete_photos_stmt->execute();
+            
+            // 나무 삭제
+            $query = "DELETE FROM trees WHERE tree_id = :tree_id";
+            $stmt = $db->prepare($query);
+            $stmt->bindParam(':tree_id', $tree_id);
+            $stmt->execute();
+            
+            $delete_count++;
+        }
+        
+        $db->commit();
+        logActivity($_SESSION['user_id'], 'delete_bulk', 'tree', 0, "{$delete_count}개 나무 일괄 삭제");
+        
+        $success_message = "{$delete_count}개의 나무가 삭제되었습니다.";
+    } catch (Exception $e) {
+        $db->rollBack();
+        $error_message = '일괄 삭제 중 오류가 발생했습니다: ' . $e->getMessage();
+    }
+}
+
+// 일괄 상태 변경 처리
+if (isset($_POST['bulk_update_status']) && isset($_POST['selected_trees']) && isset($_POST['bulk_health_status'])) {
+    $selected_trees = $_POST['selected_trees'];
+    $new_status = sanitize($_POST['bulk_health_status']);
+    $update_count = 0;
+    
+    try {
+        $db->beginTransaction();
+        
+        foreach ($selected_trees as $tree_id) {
+            $tree_id = (int)$tree_id;
+            
+            $query = "UPDATE trees SET health_status = :health_status WHERE tree_id = :tree_id";
+            $stmt = $db->prepare($query);
+            $stmt->bindParam(':health_status', $new_status);
+            $stmt->bindParam(':tree_id', $tree_id);
+            $stmt->execute();
+            
+            $update_count++;
+        }
+        
+        $db->commit();
+        logActivity($_SESSION['user_id'], 'update_bulk', 'tree', 0, "{$update_count}개 나무 건강상태 일괄 변경 -> {$new_status}");
+        
+        $success_message = "{$update_count}개의 나무 건강상태가 변경되었습니다.";
+    } catch (Exception $e) {
+        $db->rollBack();
+        $error_message = '일괄 상태 변경 중 오류가 발생했습니다: ' . $e->getMessage();
+    }
+}
+
+// 단일 삭제 처리
 if (isset($_GET['delete']) && isAdmin()) {
     $tree_id = (int)$_GET['delete'];
     
@@ -32,6 +119,13 @@ if (isset($_GET['delete']) && isAdmin()) {
                 unlink($file_path);
             }
         }
+
+        // ⭐ DB에서 사진 레코드 삭제
+        $delete_photos_query = "DELETE FROM tree_photos WHERE tree_id = :tree_id";
+        $delete_photos_stmt = $db->prepare($delete_photos_query);
+        $delete_photos_stmt->bindParam(':tree_id', $tree_id);
+        $delete_photos_stmt->execute();
+
         
         // 나무 삭제 (CASCADE로 사진도 자동 삭제)
         $query = "DELETE FROM trees WHERE tree_id = :tree_id";
@@ -145,6 +239,16 @@ $count_stmt->execute();
 $total_items = $count_stmt->fetch()['total'];
 $total_pages = ceil($total_items / $items_per_page);
 
+// 중복 나무 번호 체크
+$duplicate_query = "SELECT tree_number, COUNT(*) as count 
+                    FROM trees 
+                    WHERE tree_number IS NOT NULL AND tree_number != '' 
+                    GROUP BY tree_number 
+                    HAVING count > 1";
+$duplicate_stmt = $db->prepare($duplicate_query);
+$duplicate_stmt->execute();
+$duplicates = $duplicate_stmt->fetchAll();
+
 // 필터 옵션 데이터
 $regions_query = "SELECT * FROM regions ORDER BY region_name";
 $regions_stmt = $db->prepare($regions_query);
@@ -180,28 +284,60 @@ require_once '../../includes/header.php';
 .health-good { background: #dbeafe; color: #1e40af; }
 .health-fair { background: #fef3c7; color: #92400e; }
 .health-poor { background: #fee2e2; color: #991b1b; }
-.health-dead { background: #f3f4f6; color: #4b5563; }
+.health-dead { background: #f3f4f6; color: #374151; }
 
-.pagination {
+.bulk-action-bar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    display: none;
+    align-items: center;
+    gap: 15px;
+    z-index: 1000;
+    border: 2px solid #3b82f6;
+}
+
+.bulk-action-bar.active {
     display: flex;
-    gap: 5px;
-    justify-content: center;
-    margin-top: 20px;
 }
-.pagination a, .pagination span {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    text-decoration: none;
-    color: #333;
+
+.bulk-action-bar .count {
+    font-weight: 600;
+    color: #3b82f6;
 }
-.pagination a:hover {
-    background: #f0f0f0;
+
+.checkbox-col {
+    width: 40px;
+    text-align: center;
 }
-.pagination .active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-color: #667eea;
+
+.duplicate-warning {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.duplicate-warning h4 {
+    margin: 0 0 10px 0;
+    color: #92400e;
+}
+
+.duplicate-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0 0;
+}
+
+.duplicate-list li {
+    padding: 5px 0;
+    color: #78350f;
 }
 </style>
 
@@ -213,17 +349,30 @@ require_once '../../includes/header.php';
     <div class="alert alert-error"><?php echo $error_message; ?></div>
 <?php endif; ?>
 
-<!-- 검색 및 필터 -->
-<div class="card" style="margin-bottom: 20px;">
+<?php if (count($duplicates) > 0): ?>
+    <div class="duplicate-warning">
+        <h4>⚠️ 중복된 나무 번호가 발견되었습니다</h4>
+        <p style="margin: 5px 0;">다음 나무 번호들이 중복되어 있습니다. 확인 후 수정해주세요:</p>
+        <ul class="duplicate-list">
+            <?php foreach ($duplicates as $dup): ?>
+                <li>
+                    <strong><?php echo htmlspecialchars($dup['tree_number']); ?></strong> 
+                    - <?php echo $dup['count']; ?>개 중복
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+<?php endif; ?>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">🔍 검색 및 필터</h3>
+    </div>
     <div class="card-body">
-        <form method="GET" action="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
-            <div class="form-group" style="margin-bottom: 0;">
+        <form method="GET" action="list.php" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
                 <label for="search">검색</label>
-                <input type="text" 
-                       id="search" 
-                       name="search" 
-                       placeholder="나무번호, 수종명, 장소명"
-                       value="<?php echo htmlspecialchars($search); ?>">
+                <input type="text" id="search" name="search" placeholder="나무번호, 수종, 장소명" value="<?php echo htmlspecialchars($search); ?>">
             </div>
             
             <div class="form-group" style="margin-bottom: 0;">
@@ -231,7 +380,7 @@ require_once '../../includes/header.php';
                 <select id="region" name="region">
                     <option value="0">전체</option>
                     <?php foreach ($regions as $region): ?>
-                        <option value="<?php echo $region['region_id']; ?>" 
+                        <option value="<?php echo $region['region_id']; ?>"
                                 <?php echo $region_filter == $region['region_id'] ? 'selected' : ''; ?>>
                             <?php echo htmlspecialchars($region['region_name']); ?>
                         </option>
@@ -292,100 +441,104 @@ require_once '../../includes/header.php';
             <a href="add.php" class="btn btn-primary">➕ 나무 추가</a>
             <a href="map.php" class="btn btn-success">🗺️ 지도 보기</a>
             <a href="#" class="btn btn-success" onclick="exportToExcel()">📥 엑셀 내보내기</a>
-
-			<!-- 엑셀 다운로드 버튼
-            <button type="button" class="btn btn-success" onclick="exportToExcel()" style="background: #10b981;">
-                <i class="icon">📥</i> 엑셀 다운로드
-            </button>  -->
         </div>
-
-
     </div>
     <div class="card-body">
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>나무번호</th>
-                        <th>수종</th>
-                        <th>지역</th>
-                        <th>장소</th>
-                        <th>높이(m)</th>
-                        <th>직경(cm)</th>
-                        <th>건강상태</th>
-                        <th>사진</th>
-                        <th>등록일</th>
-                        <th>관리</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (count($trees) > 0): ?>
-                        <?php foreach ($trees as $tree): ?>
+        <form method="POST" id="bulk-form">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="checkbox-col">
+                                <input type="checkbox" id="select-all" onchange="toggleSelectAll(this)">
+                            </th>
+                            <th>나무번호</th>
+                            <th>수종</th>
+                            <th>지역</th>
+                            <th>장소</th>
+                            <th>높이(m)</th>
+                            <th>직경(cm)</th>
+                            <th>건강상태</th>
+                            <th>사진</th>
+                            <th>등록일</th>
+                            <th>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (count($trees) > 0): ?>
+                            <?php foreach ($trees as $tree): ?>
+                                <tr>
+                                    <td class="checkbox-col">
+                                        <input type="checkbox" name="selected_trees[]" 
+                                               value="<?php echo $tree['tree_id']; ?>" 
+                                               class="tree-checkbox"
+                                               onchange="updateBulkActionBar()">
+                                    </td>
+                                    <td style="font-weight: 600;">
+                                        <a href="view.php?id=<?php echo $tree['tree_id']; ?>" 
+                                           style="color: var(--primary-color); text-decoration: none;">
+                                            <?php echo htmlspecialchars($tree['tree_number'] ?: '-'); ?>
+                                        </a>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($tree['species_name'] ?: '-'); ?></td>
+                                    <td><?php echo htmlspecialchars($tree['region_name'] ?: '-'); ?></td>
+                                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        <?php echo htmlspecialchars($tree['location_name'] ?: '-'); ?>
+                                    </td>
+                                    <td><?php echo $tree['height'] ? number_format($tree['height'], 2) : '-'; ?></td>
+                                    <td><?php echo $tree['diameter'] ? number_format($tree['diameter'], 2) : '-'; ?></td>
+                                    <td>
+                                        <?php
+                                        $health_classes = [
+                                            'excellent' => 'health-excellent',
+                                            'good' => 'health-good',
+                                            'fair' => 'health-fair',
+                                            'poor' => 'health-poor',
+                                            'dead' => 'health-dead'
+                                        ];
+                                        $health_labels = [
+                                            'excellent' => '최상',
+                                            'good' => '양호',
+                                            'fair' => '보통',
+                                            'poor' => '나쁨',
+                                            'dead' => '고사'
+                                        ];
+                                        $health = $tree['health_status'] ?: 'good';
+                                        ?>
+                                        <span class="health-badge <?php echo $health_classes[$health]; ?>">
+                                            <?php echo $health_labels[$health]; ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($tree['photo_count'] > 0): ?>
+                                            📷 <?php echo $tree['photo_count']; ?>장
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo date('Y-m-d', strtotime($tree['created_at'])); ?></td>
+                                    <td>
+                                        <a href="view.php?id=<?php echo $tree['tree_id']; ?>" class="btn btn-sm btn-success">보기</a>
+                                        <a href="edit.php?id=<?php echo $tree['tree_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
+                                        <?php if (isAdmin()): ?>
+                                            <a href="?delete=<?php echo $tree['tree_id']; ?>" 
+                                               class="btn btn-sm btn-danger" 
+                                               onclick="return confirm('이 나무를 삭제하시겠습니까?\n연결된 모든 사진이 삭제됩니다.');">삭제</a>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
                             <tr>
-                                <td style="font-weight: 600;">
-                                    <a href="view.php?id=<?php echo $tree['tree_id']; ?>" 
-                                       style="color: var(--primary-color); text-decoration: none;">
-                                        <?php echo htmlspecialchars($tree['tree_number'] ?: '-'); ?>
-                                    </a>
-                                </td>
-                                <td><?php echo htmlspecialchars($tree['species_name'] ?: '-'); ?></td>
-                                <td><?php echo htmlspecialchars($tree['region_name'] ?: '-'); ?></td>
-                                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    <?php echo htmlspecialchars($tree['location_name'] ?: '-'); ?>
-                                </td>
-                                <td><?php echo $tree['height'] ? number_format($tree['height'], 2) : '-'; ?></td>
-                                <td><?php echo $tree['diameter'] ? number_format($tree['diameter'], 2) : '-'; ?></td>
-                                <td>
-                                    <?php
-                                    $health_classes = [
-                                        'excellent' => 'health-excellent',
-                                        'good' => 'health-good',
-                                        'fair' => 'health-fair',
-                                        'poor' => 'health-poor',
-                                        'dead' => 'health-dead'
-                                    ];
-                                    $health_labels = [
-                                        'excellent' => '최상',
-                                        'good' => '양호',
-                                        'fair' => '보통',
-                                        'poor' => '나쁨',
-                                        'dead' => '고사'
-                                    ];
-                                    $health = $tree['health_status'] ?: 'good';
-                                    ?>
-                                    <span class="health-badge <?php echo $health_classes[$health]; ?>">
-                                        <?php echo $health_labels[$health]; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if ($tree['photo_count'] > 0): ?>
-                                        📷 <?php echo $tree['photo_count']; ?>장
-                                    <?php else: ?>
-                                        -
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo date('Y-m-d', strtotime($tree['created_at'])); ?></td>
-                                <td>
-                                    <a href="view.php?id=<?php echo $tree['tree_id']; ?>" class="btn btn-sm btn-success">보기</a>
-                                    <a href="edit.php?id=<?php echo $tree['tree_id']; ?>" class="btn btn-sm btn-secondary">수정</a>
-                                    <?php if (isAdmin()): ?>
-                                        <a href="?delete=<?php echo $tree['tree_id']; ?>" 
-                                           class="btn btn-sm btn-danger" 
-                                           onclick="return confirm('이 나무를 삭제하시겠습니까?\n연결된 모든 사진이 삭제됩니다.');">삭제</a>
-                                    <?php endif; ?>
+                                <td colspan="11" style="text-align: center; padding: 40px;">
+                                    등록된 나무가 없습니다.
                                 </td>
                             </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="10" style="text-align: center; padding: 40px;">
-                                등록된 나무가 없습니다.
-                            </td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </form>
         
         <!-- 페이징 -->
         <?php if ($total_pages > 1): ?>
@@ -410,6 +563,34 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
+<!-- 일괄 작업 바 -->
+<div class="bulk-action-bar" id="bulk-action-bar">
+    <span class="count"><span id="selected-count">0</span>개 선택됨</span>
+    
+    <select id="bulk-health-status" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+        <option value="">건강상태 일괄 변경</option>
+        <option value="excellent">최상</option>
+        <option value="good">양호</option>
+        <option value="fair">보통</option>
+        <option value="poor">나쁨</option>
+        <option value="dead">고사</option>
+    </select>
+    
+    <button type="button" onclick="bulkUpdateStatus()" class="btn btn-primary btn-sm">
+        상태 변경
+    </button>
+    
+    <?php if (isAdmin()): ?>
+        <button type="button" onclick="bulkDelete()" class="btn btn-danger btn-sm">
+            선택 삭제
+        </button>
+    <?php endif; ?>
+    
+    <button type="button" onclick="clearSelection()" class="btn btn-secondary btn-sm">
+        선택 해제
+    </button>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">💡 나무 관리 안내</h3>
@@ -420,17 +601,109 @@ require_once '../../includes/header.php';
             <li style="margin-bottom: 10px;">✓ 나무별로 여러 장의 사진(전체/잎/수피/꽃/열매 등)을 등록할 수 있습니다.</li>
             <li style="margin-bottom: 10px;">✓ GPS 좌표를 입력하면 지도에서 위치를 확인할 수 있습니다.</li>
             <li style="margin-bottom: 10px;">✓ 건강상태는 주기적으로 업데이트하여 관리하세요.</li>
+            <li style="margin-bottom: 10px;">✓ 체크박스로 여러 나무를 선택하여 일괄 작업이 가능합니다.</li>
         </ul>
     </div>
 </div>
 
 <script>
+// 전체 선택/해제
+function toggleSelectAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.tree-checkbox');
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    updateBulkActionBar();
+}
+
+// 일괄 작업 바 업데이트
+function updateBulkActionBar() {
+    const checkboxes = document.querySelectorAll('.tree-checkbox:checked');
+    const count = checkboxes.length;
+    const bar = document.getElementById('bulk-action-bar');
+    const countSpan = document.getElementById('selected-count');
+    
+    countSpan.textContent = count;
+    
+    if (count > 0) {
+        bar.classList.add('active');
+    } else {
+        bar.classList.remove('active');
+    }
+    
+    // 전체 선택 체크박스 상태 업데이트
+    const allCheckboxes = document.querySelectorAll('.tree-checkbox');
+    const selectAllCheckbox = document.getElementById('select-all');
+    selectAllCheckbox.checked = (count === allCheckboxes.length && count > 0);
+}
+
+// 선택 해제
+function clearSelection() {
+    const checkboxes = document.querySelectorAll('.tree-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    document.getElementById('select-all').checked = false;
+    updateBulkActionBar();
+}
+
+// 일괄 상태 변경
+function bulkUpdateStatus() {
+    const status = document.getElementById('bulk-health-status').value;
+    if (!status) {
+        alert('변경할 건강상태를 선택해주세요.');
+        return;
+    }
+    
+    const checkboxes = document.querySelectorAll('.tree-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('나무를 선택해주세요.');
+        return;
+    }
+    
+    if (!confirm(`선택한 ${checkboxes.length}개 나무의 건강상태를 변경하시겠습니까?`)) {
+        return;
+    }
+    
+    const form = document.getElementById('bulk-form');
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'bulk_update_status';
+    input.value = '1';
+    form.appendChild(input);
+    
+    const statusInput = document.createElement('input');
+    statusInput.type = 'hidden';
+    statusInput.name = 'bulk_health_status';
+    statusInput.value = status;
+    form.appendChild(statusInput);
+    
+    form.submit();
+}
+
+// 일괄 삭제
+function bulkDelete() {
+    const checkboxes = document.querySelectorAll('.tree-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('삭제할 나무를 선택해주세요.');
+        return;
+    }
+    
+    if (!confirm(`선택한 ${checkboxes.length}개 나무를 삭제하시겠습니까?\n연결된 모든 사진도 함께 삭제됩니다.`)) {
+        return;
+    }
+    
+    const form = document.getElementById('bulk-form');
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'bulk_delete';
+    input.value = '1';
+    form.appendChild(input);
+    
+    form.submit();
+}
+
+// 엑셀 내보내기
 function exportToExcel() {
-    // 현재 필터 조건 가져오기
     const urlParams = new URLSearchParams(window.location.search);
     const exportUrl = '../export/trees.php?' + urlParams.toString();
     
-    // 확인 다이얼로그
     if (confirm('현재 필터 조건으로 나무 데이터를 엑셀로 내보내시겠습니까?')) {
         window.location.href = exportUrl;
     }

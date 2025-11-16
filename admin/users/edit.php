@@ -168,7 +168,8 @@ include '../../includes/header.php';
                 <label for="phone">연락처</label>
                 <input type="tel" id="phone" name="phone" 
                        pattern="[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}"
-                       value="<?php echo htmlspecialchars($user['phone']); ?>">
+                       value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>">
+
             </div>
         </div>
         

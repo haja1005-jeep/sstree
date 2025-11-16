@@ -3,6 +3,15 @@
  * 나무 데이터 엑셀 내보내기
  * Smart Tree Map - Sinan County
  */
+
+// 완전한 에러 억제
+@ini_set('display_errors', 0);
+@ini_set('display_startup_errors', 0);
+@error_reporting(0);
+
+// 출력 버퍼 시작
+ob_start();
+
 require_once '../../config/config.php';
 require_once '../../includes/auth.php';
 
@@ -250,18 +259,32 @@ $filename = '신안군_나무데이터_' . date('Ymd_His') . '.xlsx';
 // 활동 로그
 logActivity($_SESSION['user_id'], 'export', 'trees', null, '나무 데이터 ' . count($trees) . '건 엑셀 내보내기');
 
+// 메모리에 엑셀 파일 생성
+$writer = new Xlsx($spreadsheet);
+
+// 임시 파일에 저장
+$tempFile = tempnam(sys_get_temp_dir(), 'excel_');
+$writer->save($tempFile);
+
+// 모든 출력 버퍼 제거
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
+// 파일 크기 확인
+$fileSize = filesize($tempFile);
+
 // 다운로드 헤더
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment;filename="' . $filename . '"');
+header('Content-Length: ' . $fileSize);
 header('Cache-Control: max-age=0');
-header('Cache-Control: max-age=1');
-header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-header('Cache-Control: cache, must-revalidate');
 header('Pragma: public');
 
+// 파일 출력
+readfile($tempFile);
 
-$writer = new Xlsx($spreadsheet);
-$writer->save('php://output');
+// 임시 파일 삭제
+unlink($tempFile);
 
 exit;

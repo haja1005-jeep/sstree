@@ -162,17 +162,86 @@ include '../../includes/header.php';
 ?>
 
 <style>
+.stats-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card.green {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.stat-card.blue {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.stat-card.orange {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.stat-card.purple {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.stat-value {
+    font-size: 36px;
+    font-weight: 700;
+    margin: 10px 0;
+}
+
+.stat-label {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.stat-icon {
+    font-size: 24px;
+    opacity: 0.8;
+}
+
+.chart-container {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.chart-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #1f2937;
+}
+
 .period-selector {
     background: white;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
     align-items: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
+
 .period-btn {
     padding: 8px 16px;
     border: 2px solid #e5e7eb;
@@ -184,354 +253,446 @@ include '../../includes/header.php';
     text-decoration: none;
     font-weight: 500;
 }
+
 .period-btn:hover {
     border-color: #667eea;
     color: #667eea;
 }
+
 .period-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: #667eea;
     border-color: #667eea;
-}
-.chart-container {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-.progress-bar {
-    background: #f3f4f6;
-    border-radius: 10px;
-    height: 24px;
-    overflow: hidden;
-    position: relative;
-}
-.progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
     color: white;
+}
+
+.export-btn {
+    margin-left: auto;
+    padding: 10px 20px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.export-btn:hover {
+    background: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.table-container {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead {
+    background: #f9fafb;
+}
+
+.data-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.data-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
-    transition: width 1s ease;
 }
-.rank-badge {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 14px;
+
+.badge-excellent { background: #d1fae5; color: #065f46; }
+.badge-good { background: #dbeafe; color: #1e40af; }
+.badge-fair { background: #fef3c7; color: #92400e; }
+.badge-poor { background: #fee2e2; color: #991b1b; }
+.badge-dead { background: #f3f4f6; color: #374151; }
+
+@media (max-width: 768px) {
+    .stats-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .period-selector {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .export-btn {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 </style>
 
-<div class="page-header">
-    <h2>📊 통계 대시보드</h2>
-    <div style="display: flex; gap: 10px;">
-        <a href="#" onclick="exportStatistics()" class="btn btn-success">📥 통계 엑셀 다운로드</a>
-<!--
-<div style="margin: 20px 0; text-align: right;">
-    <button type="button" class="btn btn-success" onclick="exportStatistics()" style="background: #10b981;">
-        <i class="icon">📥</i> 통계 엑셀 다운로드
-    </button>
-</div> -->
+<div class="container" style="padding: 30px;">
+    <h1 style="margin-bottom: 10px;">📊 통계 대시보드</h1>
+    <p style="color: #6b7280; margin-bottom: 30px;">신안군 스마트 트리맵 종합 통계</p>
+
+    <!-- 기간 선택 -->
+    <div class="period-selector">
+        <span style="font-weight: 600; color: #374151;">기간 선택:</span>
+        <a href="?period=7days" class="period-btn <?php echo $period == '7days' ? 'active' : ''; ?>">최근 7일</a>
+        <a href="?period=30days" class="period-btn <?php echo $period == '30days' ? 'active' : ''; ?>">최근 30일</a>
+        <a href="?period=90days" class="period-btn <?php echo $period == '90days' ? 'active' : ''; ?>">최근 90일</a>
+        <a href="?period=1year" class="period-btn <?php echo $period == '1year' ? 'active' : ''; ?>">최근 1년</a>
+        <a href="?period=all" class="period-btn <?php echo $period == 'all' ? 'active' : ''; ?>">전체 기간</a>
+        
+        <button onclick="exportStatistics()" class="export-btn">
+            📥 엑셀 다운로드
+        </button>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="stats-container">
+        <div class="stat-card green">
+            <div class="stat-icon">🌳</div>
+            <div class="stat-value"><?php echo number_format($stats['total_trees']); ?></div>
+            <div class="stat-label">총 나무 수</div>
+        </div>
+
+        <div class="stat-card blue">
+            <div class="stat-icon">📍</div>
+            <div class="stat-value"><?php echo number_format($stats['total_locations']); ?></div>
+            <div class="stat-label">총 장소 수</div>
+        </div>
+
+        <div class="stat-card orange">
+            <div class="stat-icon">🌿</div>
+            <div class="stat-value"><?php echo number_format($stats['total_species']); ?></div>
+            <div class="stat-label">총 수종 수</div>
+        </div>
+
+        <div class="stat-card purple">
+            <div class="stat-icon">📸</div>
+            <div class="stat-value"><?php echo number_format($stats['total_photos']); ?></div>
+            <div class="stat-label">총 사진 수</div>
+        </div>
+    </div>
 
 
-        <button onclick="window.print()" class="btn btn-secondary">🖨️ 인쇄</button>
-    </div>
-</div>
 
-<!-- 기간 선택 -->
-<div class="period-selector">
-    <strong style="color: #2c3e50;">기간 선택:</strong>
-    <a href="?period=7days" class="period-btn <?php echo $period == '7days' ? 'active' : ''; ?>">최근 7일</a>
-    <a href="?period=30days" class="period-btn <?php echo $period == '30days' ? 'active' : ''; ?>">최근 30일</a>
-    <a href="?period=90days" class="period-btn <?php echo $period == '90days' ? 'active' : ''; ?>">최근 90일</a>
-    <a href="?period=1year" class="period-btn <?php echo $period == '1year' ? 'active' : ''; ?>">최근 1년</a>
-    <a href="?period=all" class="period-btn <?php echo $period == 'all' ? 'active' : ''; ?>">전체 기간</a>
-    <span style="margin-left: auto; color: #667eea; font-weight: 600;">현재: <?php echo $period_label; ?></span>
-</div>
-
-<!-- 전체 통계 카드 -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue">🌳</div>
-        <div class="stat-info">
-            <h3><?php echo number_format($stats['total_trees']); ?></h3>
-            <p>총 나무 수</p>
-        </div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-icon green">🌲</div>
-        <div class="stat-info">
-            <h3><?php echo number_format($stats['total_species']); ?></h3>
-            <p>등록 수종</p>
-        </div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-icon orange">📍</div>
-        <div class="stat-info">
-            <h3><?php echo number_format($stats['total_locations']); ?></h3>
-            <p>관리 장소</p>
-        </div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-icon purple">📷</div>
-        <div class="stat-info">
-            <h3><?php echo number_format($stats['total_photos']); ?></h3>
-            <p>등록 사진</p>
-        </div>
-    </div>
-</div>
-
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-    <!-- 지역별 현황 -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">🗺️ 지역별 나무 현황</h3>
-        </div>
-        <div class="card-body">
-            <?php if (count($region_stats) > 0): ?>
-                <?php 
-                $max_count = max(array_column($region_stats, 'tree_count'));
-                foreach ($region_stats as $stat): 
-                    $percentage = $max_count > 0 ? ($stat['tree_count'] / $max_count * 100) : 0;
-                ?>
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-weight: 600;"><?php echo htmlspecialchars($stat['region_name']); ?></span>
-                            <span style="color: #667eea; font-weight: 600;"><?php echo number_format($stat['tree_count']); ?>그루</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: <?php echo $percentage; ?>%;">
-                                <?php if ($percentage > 20): ?>
-                                    <?php echo number_format($percentage, 1); ?>%
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p style="text-align: center; color: #999; padding: 20px;">데이터가 없습니다.</p>
-            <?php endif; ?>
-        </div>
-    </div>
-    
-    <!-- 건강상태별 현황 -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">💚 건강상태별 현황</h3>
-        </div>
-        <div class="card-body">
-            <?php if (count($health_stats) > 0): ?>
-                <?php foreach ($health_stats as $stat): ?>
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-weight: 600;"><?php echo $health_labels[$stat['health_status']]; ?></span>
-                            <span style="font-weight: 600;">
-                                <?php echo number_format($stat['count']); ?>그루 
-                                <span style="color: #6b7280;">(<?php echo $stat['percentage']; ?>%)</span>
-                            </span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" 
-                                 style="width: <?php echo $stat['percentage']; ?>%; background: <?php echo $health_colors[$stat['health_status']]; ?>;">
-                                <?php if ($stat['percentage'] > 10): ?>
-                                    <?php echo $stat['percentage']; ?>%
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p style="text-align: center; color: #999; padding: 20px;">데이터가 없습니다.</p>
-            <?php endif; ?>
-        </div>
-    </div>
-</div>
-
-<!-- 수종별 현황 -->
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">🌲 주요 수종 현황 (상위 10개)</h3>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table>
+    <!-- 지역별 통계 테이블 -->
+    <div class="chart-container">
+        <h3 class="chart-title">🗺️ 지역별 나무 현황</h3>
+        <div class="table-container">
+            <table class="data-table">
                 <thead>
                     <tr>
-                        <th style="width: 50px; text-align: center;">순위</th>
-                        <th>한글명</th>
-                        <th>학명</th>
-                        <th style="text-align: right;">나무 수</th>
-                        <th style="width: 300px;">비율</th>
+                        <th>순위</th>
+                        <th>지역명</th>
+                        <th>나무 수</th>
+                        <th>비율</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (count($species_stats) > 0): ?>
-                        <?php 
-                        $rank = 1;
-                        $max_count = $species_stats[0]['tree_count'];
-                        foreach ($species_stats as $stat): 
-                            $percentage = $max_count > 0 ? ($stat['tree_count'] / $max_count * 100) : 0;
-                        ?>
-                            <tr>
-                                <td style="text-align: center;">
-                                    <div class="rank-badge"><?php echo $rank++; ?></div>
-                                </td>
-                                <td><strong><?php echo htmlspecialchars($stat['korean_name']); ?></strong></td>
-                                <td><em><?php echo htmlspecialchars($stat['scientific_name']); ?></em></td>
-                                <td style="text-align: right; font-weight: 600; color: #667eea;">
-                                    <?php echo number_format($stat['tree_count']); ?>그루
-                                </td>
-                                <td>
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" style="width: <?php echo $percentage; ?>%;">
-                                            <?php if ($percentage > 15): ?>
-                                                <?php echo number_format($percentage, 1); ?>%
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
+                    <?php 
+                    $rank = 1;
+                    foreach ($region_stats as $stat): 
+                        $percentage = $stats['total_trees'] > 0 ? round(($stat['tree_count'] / $stats['total_trees']) * 100, 1) : 0;
+                    ?>
                         <tr>
-                            <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
-                                데이터가 없습니다.
+                            <td><strong><?php echo $rank++; ?></strong></td>
+                            <td><?php echo htmlspecialchars($stat['region_name']); ?></td>
+                            <td><strong><?php echo number_format($stat['tree_count']); ?>그루</strong></td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex: 1; background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden;">
+                                        <div style="width: <?php echo $percentage; ?>%; background: #667eea; height: 100%;"></div>
+                                    </div>
+                                    <span style="font-weight: 600; color: #667eea;"><?php echo $percentage; ?>%</span>
+                                </div>
                             </td>
                         </tr>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
     </div>
-</div>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-    <!-- 카테고리별 장소 현황 -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">📁 카테고리별 장소 현황</h3>
+    <!-- 수종별 통계 -->
+    <div class="chart-container">
+        <h3 class="chart-title">🌿 수종별 나무 현황 (상위 10개)</h3>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th>한글명</th>
+                        <th>학명</th>
+                        <th>나무 수</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $rank = 1;
+                    foreach ($species_stats as $stat): 
+                    ?>
+                        <tr>
+                            <td><strong><?php echo $rank++; ?></strong></td>
+                            <td><?php echo htmlspecialchars($stat['korean_name']); ?></td>
+                            <td style="color: #6b7280; font-style: italic;"><?php echo htmlspecialchars($stat['scientific_name']); ?></td>
+                            <td><strong><?php echo number_format($stat['tree_count']); ?>그루</strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-        <div class="card-body">
-            <?php if (count($category_stats) > 0): ?>
-                <?php 
-                $max_count = max(array_column($category_stats, 'location_count'));
-                foreach ($category_stats as $stat): 
-                    $percentage = $max_count > 0 ? ($stat['location_count'] / $max_count * 100) : 0;
-                ?>
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-weight: 600;"><?php echo htmlspecialchars($stat['category_name']); ?></span>
-                            <span style="color: #667eea; font-weight: 600;"><?php echo number_format($stat['location_count']); ?>개</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: <?php echo $percentage; ?>%;">
-                                <?php if ($percentage > 20): ?>
-                                    <?php echo number_format($percentage, 1); ?>%
+    </div>
+
+	    <!-- 차트 영역 -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; margin-bottom: 20px;">
+        <!-- 건강상태별 차트 -->
+        <div class="chart-container">
+            <h3 class="chart-title">🏥 건강상태별 나무 현황</h3>
+            <canvas id="healthChart" height="250"></canvas>
+        </div>
+
+        <!-- 카테고리별 차트 -->
+        <div class="chart-container">
+            <h3 class="chart-title">📂 카테고리별 장소 현황</h3>
+            <canvas id="categoryChart" height="250"></canvas>
+        </div>
+    </div>
+
+    <!-- 월별 추이 차트 -->
+    <div class="chart-container">
+        <h3 class="chart-title">📈 월별 나무 등록 추이 (최근 12개월)</h3>
+        <canvas id="monthlyChart" height="100"></canvas>
+    </div>
+
+    <!-- 사용자 활동 랭킹 -->
+    <?php if (count($user_stats) > 0): ?>
+    <div class="chart-container">
+        <h3 class="chart-title">🏆 사용자별 활동 랭킹 (상위 10명)</h3>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th>사용자</th>
+                        <th>등록한 나무 수</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $rank = 1;
+                    foreach ($user_stats as $stat): 
+                    ?>
+                        <tr>
+                            <td>
+                                <?php if ($rank <= 3): ?>
+                                    <span style="font-size: 20px;">
+                                        <?php echo $rank == 1 ? '🥇' : ($rank == 2 ? '🥈' : '🥉'); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <strong><?php echo $rank; ?></strong>
                                 <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p style="text-align: center; color: #999; padding: 20px;">데이터가 없습니다.</p>
-            <?php endif; ?>
+                            </td>
+                            <td>
+                                <div><?php echo htmlspecialchars($stat['name'] ?: $stat['username']); ?></div>
+                                <div style="font-size: 13px; color: #6b7280;">@<?php echo htmlspecialchars($stat['username']); ?></div>
+                            </td>
+                            <td><strong style="color: #667eea;"><?php echo number_format($stat['tree_count']); ?>그루</strong></td>
+                        </tr>
+                    <?php 
+                    $rank++;
+                    endforeach; 
+                    ?>
+                </tbody>
+            </table>
         </div>
     </div>
-    
-    <!-- 사용자별 활동 순위 -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">🏆 사용자별 활동 순위 (상위 10명)</h3>
-        </div>
-        <div class="card-body">
-            <?php if (count($user_stats) > 0): ?>
-                <?php 
-                $rank = 1;
-                foreach ($user_stats as $stat): 
-                ?>
-                    <div style="display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
-                        <div class="rank-badge" style="margin-right: 15px;"><?php echo $rank++; ?></div>
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600;"><?php echo htmlspecialchars($stat['name'] ?: $stat['username']); ?></div>
-                            <div style="font-size: 13px; color: #6b7280;">@<?php echo htmlspecialchars($stat['username']); ?></div>
-                        </div>
-                        <div style="font-weight: 700; color: #667eea; font-size: 18px;">
-                            <?php echo number_format($stat['tree_count']); ?>그루
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <p style="text-align: center; color: #999; padding: 20px;">데이터가 없습니다.</p>
-            <?php endif; ?>
-        </div>
-    </div>
+    <?php endif; ?>
 </div>
 
-<!-- 월별 등록 추이 -->
-<?php if (count($monthly_stats) > 0): ?>
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">📈 월별 나무 등록 추이 (최근 12개월)</h3>
-        </div>
-        <div class="card-body">
-            <div style="display: flex; gap: 10px; align-items: flex-end; height: 200px;">
-                <?php 
-                $max_monthly = max(array_column($monthly_stats, 'count'));
-                foreach ($monthly_stats as $stat): 
-                    $height = $max_monthly > 0 ? ($stat['count'] / $max_monthly * 100) : 0;
-                    $month_label = date('m월', strtotime($stat['month'] . '-01'));
-                ?>
-                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                        <div style="background: linear-gradient(180deg, #667eea 0%, #764ba2 100%); 
-                                    width: 100%; 
-                                    height: <?php echo $height; ?>%; 
-                                    border-radius: 8px 8px 0 0;
-                                    display: flex;
-                                    align-items: flex-start;
-                                    justify-content: center;
-                                    padding-top: 5px;
-                                    color: white;
-                                    font-weight: 600;
-                                    font-size: 12px;
-                                    min-height: 30px;">
-                            <?php if ($height > 15): ?>
-                                <?php echo $stat['count']; ?>
-                            <?php endif; ?>
-                        </div>
-                        <div style="margin-top: 5px; font-size: 11px; color: #6b7280; font-weight: 600;">
-                            <?php echo $month_label; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-<?php endif; ?>
-
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
 <script>
+// 건강상태 차트
+const healthCtx = document.getElementById('healthChart').getContext('2d');
+new Chart(healthCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [
+            <?php foreach ($health_stats as $stat): ?>
+                '<?php echo $health_labels[$stat['health_status']]; ?>',
+            <?php endforeach; ?>
+        ],
+        datasets: [{
+            data: [
+                <?php foreach ($health_stats as $stat): ?>
+                    <?php echo $stat['count']; ?>,
+                <?php endforeach; ?>
+            ],
+            backgroundColor: [
+                <?php foreach ($health_stats as $stat): ?>
+                    '<?php echo $health_colors[$stat['health_status']]; ?>',
+                <?php endforeach; ?>
+            ],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: {
+                    padding: 15,
+                    font: { size: 13 }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return label + ': ' + value + '그루 (' + percentage + '%)';
+                    }
+                }
+            }
+        }
+    }
+});
+
+// 카테고리별 차트
+const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+new Chart(categoryCtx, {
+    type: 'pie',
+    data: {
+        labels: [
+            <?php foreach ($category_stats as $stat): ?>
+                '<?php echo addslashes($stat['category_name']); ?>',
+            <?php endforeach; ?>
+        ],
+        datasets: [{
+            data: [
+                <?php foreach ($category_stats as $stat): ?>
+                    <?php echo $stat['location_count']; ?>,
+                <?php endforeach; ?>
+            ],
+            backgroundColor: [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe'
+            ],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: {
+                    padding: 15,
+                    font: { size: 13 }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.label + ': ' + context.parsed + '곳';
+                    }
+                }
+            }
+        }
+    }
+});
+
+// 월별 추이 차트
+const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+new Chart(monthlyCtx, {
+    type: 'line',
+    data: {
+        labels: [
+            <?php foreach ($monthly_stats as $stat): ?>
+                '<?php echo date('Y년 m월', strtotime($stat['month'] . '-01')); ?>',
+            <?php endforeach; ?>
+        ],
+        datasets: [{
+            label: '나무 등록 수',
+            data: [
+                <?php foreach ($monthly_stats as $stat): ?>
+                    <?php echo $stat['count']; ?>,
+                <?php endforeach; ?>
+            ],
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#667eea',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return '등록 수: ' + context.parsed.y + '그루';
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        }
+    }
+});
+
+// 엑셀 내보내기
 function exportStatistics() {
     const period = '<?php echo $period; ?>';
+    const periodLabel = '<?php echo $period_label; ?>';
     const exportUrl = '../export/statistics.php?period=' + period;
     
-    if (confirm('<?php echo $period_label; ?> 통계 데이터를 엑셀로 내보내시겠습니까?')) {
+    if (confirm('[' + periodLabel + '] 통계 데이터를 엑셀로 내보내시겠습니까?\n\n포함 내용:\n- 전체 요약\n- 지역별 통계\n- 수종별 통계\n- 건강상태별 통계\n- 카테고리별 통계\n- 월별 추이')) {
         window.location.href = exportUrl;
     }
 }
 </script>
-
 
 <?php include '../../includes/footer.php'; ?>

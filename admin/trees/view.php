@@ -43,11 +43,26 @@ if (!$tree) {
 // 사진 목록 조회
 $photos_query = "SELECT * FROM tree_photos 
                  WHERE tree_id = :tree_id 
-                 ORDER BY photo_type, uploaded_at";
+                 ORDER BY is_main DESC, sort_order ASC, uploaded_at DESC";
 $photos_stmt = $db->prepare($photos_query);
 $photos_stmt->bindParam(':tree_id', $tree_id);
 $photos_stmt->execute();
 $photos = $photos_stmt->fetchAll();
+
+// 대표 사진 찾기 (지도 마커용)
+$main_photo = null;
+if (count($photos) > 0) {
+    // is_main = 1인 사진 또는 첫 번째 사진
+    foreach ($photos as $photo) {
+        if ($photo['is_main'] == 1) {
+            $main_photo = $photo;
+            break;
+        }
+    }
+    if (!$main_photo) {
+        $main_photo = $photos[0];
+    }
+}
 
 // 사진 분류
 $photos_by_type = [
@@ -419,18 +434,45 @@ $health_colors = [
     };
     const map = new kakao.maps.Map(mapContainer, mapOption);
     
-    // 마커 표시
+    <?php if ($main_photo): ?>
+    // 원형 사진 마커 표시
+    const markerPosition = new kakao.maps.LatLng(<?php echo $tree['latitude']; ?>, <?php echo $tree['longitude']; ?>);
+    const photoUrl = '<?php echo BASE_URL . '/' . $main_photo['file_path']; ?>';
+    
+    const customContent = `
+        <div style="position: relative;">
+            <div style="
+                width: 60px;
+                height: 60px;
+                border-radius: 50%;
+                border: 4px solid white;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                background: white;
+            ">
+                <img src="${photoUrl}" style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                " alt="나무 사진">
+            </div>
+        </div>
+    `;
+    
+    const customOverlay = new kakao.maps.CustomOverlay({
+        position: markerPosition,
+        content: customContent,
+        yAnchor: 1
+    });
+    customOverlay.setMap(map);
+    <?php else: ?>
+    // 사진이 없으면 기본 마커
     const markerPosition = new kakao.maps.LatLng(<?php echo $tree['latitude']; ?>, <?php echo $tree['longitude']; ?>);
     const marker = new kakao.maps.Marker({
         position: markerPosition
     });
     marker.setMap(map);
-    
-    // 인포윈도우
-    const infowindow = new kakao.maps.InfoWindow({
-        content: '<div style="padding:10px;font-size:14px;font-weight:600;"><?php echo htmlspecialchars($tree['species_name'] ?: '나무'); ?></div>'
-    });
-    infowindow.open(map, marker);
+    <?php endif; ?>
 <?php endif; ?>
 
 // Lightbox

@@ -1,7 +1,12 @@
 <?php
 /**
- * 나무 추가
+ * 나무 추가 (개선 버전)
  * Smart Tree Map - Sinan County
+ * 
+ * 개선사항:
+ * - 사진 드래그 앤 드롭 순서 변경
+ * - 대표 사진 설정 기능
+ * - 미리보기에서 실시간 관리
  */
 
 require_once '../../config/config.php';
@@ -41,6 +46,61 @@ function autoOrientImage($image_resource, $source_path) {
     }
     return $image_resource;
 }
+
+
+/**
+ * EXIF GPS 데이터를 실제 좌표로 변환
+ */
+function getGpsFromExif($filepath) {
+    if (!function_exists('exif_read_data')) {
+        return null;
+    }
+    
+    $exif = @exif_read_data($filepath);
+    if (empty($exif['GPSLatitude']) || empty($exif['GPSLongitude'])) {
+        return null;
+    }
+    
+    // 위도 변환
+    $lat = convertGpsCoordinate($exif['GPSLatitude'], $exif['GPSLatitudeRef']);
+    // 경도 변환
+    $lng = convertGpsCoordinate($exif['GPSLongitude'], $exif['GPSLongitudeRef']);
+    
+    if ($lat === null || $lng === null) {
+        return null;
+    }
+    
+    return [
+        'latitude' => $lat,
+        'longitude' => $lng
+    ];
+}
+
+/**
+ * GPS 좌표 변환 (도분초 → 십진수)
+ */
+function convertGpsCoordinate($coordinate, $hemisphere) {
+    if (!is_array($coordinate) || count($coordinate) < 3) {
+        return null;
+    }
+    
+    // 분수 형태의 값을 십진수로 변환
+    $degrees = eval('return ' . $coordinate[0] . ';');
+    $minutes = eval('return ' . $coordinate[1] . ';');
+    $seconds = eval('return ' . $coordinate[2] . ';');
+    
+    // 십진수 좌표 계산
+    $decimal = $degrees + ($minutes / 60) + ($seconds / 3600);
+    
+    // 남반구(S) 또는 서경(W)이면 음수로
+    if ($hemisphere == 'S' || $hemisphere == 'W') {
+        $decimal *= -1;
+    }
+    
+    return $decimal;
+}
+
+
 
 function processAndSaveImage($source_path, $destination_path, $max_width = 1920, $quality = 85) {
     ini_set('memory_limit', '512M');
@@ -158,6 +218,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $upload_dir = UPLOAD_PATH;
                 if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                 
+                $photo_count = 0; // 사진 순서 카운터
+                
                 foreach ($_FILES['photos']['tmp_name'] as $key => $tmp_name) {
                     if (empty($tmp_name) || $_FILES['photos']['error'][$key] !== UPLOAD_ERR_OK) continue;
                     
@@ -179,20 +241,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (processAndSaveImage($tmp_name, $file_path, 1920, 85)) {
                             $saved_files[] = $file_path;
                             
-                            // EXIF GPS 데이터 추출
-                            $photo_lat = null;
-                            $photo_lng = null;
-                            if (function_exists('exif_read_data')) {
-                                $exif = @exif_read_data($tmp_name);
-                                if (!empty($exif['GPSLatitude']) && !empty($exif['GPSLongitude'])) {
-                                    // GPS 좌표 변환 로직 (생략 가능)
-                                }
-                            }
+                            // ✅ EXIF GPS 데이터 추출
+                            $gps_data = getGpsFromExif($tmp_name);
+                            $photo_lat = $gps_data ? $gps_data['latitude'] : null;
+                            $photo_lng = $gps_data ? $gps_data['longitude'] : null;
+                            
+                            // 사진 순서와 대표 사진 설정
+                            $photo_count++;
+                            $sort_order = $photo_count;
+                            // 첫 번째 사진만 대표 사진으로 설정
+                            $is_main = ($photo_count === 1) ? 1 : 0;
                             
                             $photo_query = "INSERT INTO tree_photos (tree_id, file_path, file_name, file_size, photo_type, 
-                                                                     latitude, longitude, uploaded_by, uploaded_at) 
+                                                                     sort_order, is_main, latitude, longitude, uploaded_by, uploaded_at) 
                                            VALUES (:tree_id, :file_path, :file_name, :file_size, :photo_type, 
-                                                   :latitude, :longitude, :uploaded_by, NOW())";
+                                                   :sort_order, :is_main, :latitude, :longitude, :uploaded_by, NOW())";
                             $photo_stmt = $db->prepare($photo_query);
                             $relative_path = 'uploads/photos/' . $new_file_name;
                             $file_size_after = filesize($file_path);
@@ -202,6 +265,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $photo_stmt->bindParam(':file_name', $file_name);
                             $photo_stmt->bindParam(':file_size', $file_size_after);
                             $photo_stmt->bindParam(':photo_type', $photo_type);
+                            $photo_stmt->bindParam(':sort_order', $sort_order);
+                            $photo_stmt->bindParam(':is_main', $is_main);
                             $photo_stmt->bindParam(':latitude', $photo_lat);
                             $photo_stmt->bindParam(':longitude', $photo_lng);
                             $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
@@ -264,6 +329,57 @@ $species_stmt = $db->prepare($species_query);
 $species_stmt->execute();
 $species_list = $species_stmt->fetchAll();
 
+// 최근 추가한 나무 5개 (자동완성용)
+$recent_trees_query = "SELECT t.*, l.location_name, s.korean_name as species_name,
+                       r.region_name, c.category_name
+                       FROM trees t
+                       LEFT JOIN locations l ON t.location_id = l.location_id
+                       LEFT JOIN tree_species_master s ON t.species_id = s.species_id
+                       LEFT JOIN regions r ON t.region_id = r.region_id
+                       LEFT JOIN categories c ON t.category_id = c.category_id
+                       ORDER BY t.created_at DESC LIMIT 5";
+$recent_trees_stmt = $db->prepare($recent_trees_query);
+$recent_trees_stmt->execute();
+$recent_trees = $recent_trees_stmt->fetchAll();
+
+// 장소별 수종 (JSON 형태로 JavaScript에서 사용)
+$location_species_query = "SELECT t.location_id, s.species_id, s.korean_name, s.scientific_name,
+                            COUNT(*) as tree_count
+                            FROM trees t
+                            INNER JOIN tree_species_master s ON t.species_id = s.species_id
+                            GROUP BY t.location_id, s.species_id, s.korean_name, s.scientific_name
+                            ORDER BY t.location_id, tree_count DESC";
+$location_species_stmt = $db->prepare($location_species_query);
+$location_species_stmt->execute();
+$location_species_raw = $location_species_stmt->fetchAll();
+
+// 장소별로 그룹화
+$location_species_map = [];
+foreach ($location_species_raw as $row) {
+    $loc_id = $row['location_id'];
+    if (!isset($location_species_map[$loc_id])) {
+        $location_species_map[$loc_id] = [];
+    }
+    $location_species_map[$loc_id][] = $row;
+}
+
+// 장소별 마지막 나무번호 (자동화용)
+// T-001, T-002 또는 001, 002 형식 모두 지원
+$location_last_number_query = "SELECT location_id, 
+                                MAX(CAST(REPLACE(REPLACE(tree_number, 'T-', ''), 't-', '') AS UNSIGNED)) as last_number
+                                FROM trees
+                                WHERE tree_number REGEXP '^[Tt]-?[0-9]+$' OR tree_number REGEXP '^[0-9]+$'
+                                GROUP BY location_id";
+$location_last_number_stmt = $db->prepare($location_last_number_query);
+$location_last_number_stmt->execute();
+$location_last_numbers_raw = $location_last_number_stmt->fetchAll();
+
+// 장소별 마지막 번호 맵
+$location_last_numbers = [];
+foreach ($location_last_numbers_raw as $row) {
+    $location_last_numbers[$row['location_id']] = $row['last_number'];
+}
+
 include '../../includes/header.php';
 ?>
 
@@ -283,6 +399,30 @@ include '../../includes/header.php';
     border-radius: 8px;
     overflow: hidden;
     background: #f9fafb;
+    cursor: move;
+    transition: transform 0.2s;
+}
+
+.preview-item:hover {
+    transform: scale(1.05);
+}
+
+.preview-item.is-main {
+    border-color: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+}
+
+.preview-item.gps-used {
+    border-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.preview-item.gps-used .use-gps-btn {
+    background: rgba(239, 68, 68, 0.95);
+}
+
+.preview-item.gps-used .use-gps-btn:hover {
+    background: rgba(220, 38, 38, 1);
 }
 
 .preview-item img {
@@ -303,6 +443,112 @@ include '../../includes/header.php';
     white-space: nowrap;
 }
 
+.preview-item .main-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: #fbbf24;
+    color: #78350f;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    z-index: 10;
+}
+
+.preview-item .set-main-btn {
+    position: absolute;
+    bottom: 35px;
+    right: 5px;
+    background: rgba(59, 130, 246, 0.9);
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.preview-item .set-main-btn:hover {
+    background: rgba(37, 99, 235, 1);
+}
+
+.drag-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    color: white;
+    text-shadow: 0 0 4px rgba(0,0,0,0.8);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.preview-item:hover .drag-handle {
+    opacity: 1;
+}
+
+.sortable-ghost {
+    opacity: 0.4;
+}
+.use-gps-btn {
+    position: absolute;
+    bottom: 35px;
+    left: 5px;
+    background: rgba(59, 130, 246, 0.95);
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    z-index: 10;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: all 0.2s;
+}
+
+.use-gps-btn:hover {
+    background: rgba(37, 99, 235, 1);
+    transform: scale(1.05);
+}
+
+.no-gps-label {
+    position: absolute;
+    bottom: 35px;
+    left: 5px;
+    background: rgba(156, 163, 175, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    z-index: 10;
+}
+
+.btn-info {
+    background: #0ea5e9;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(14, 165, 233, 0.3);
+    transition: all 0.2s;
+}
+
+.btn-info:hover {
+    background: #0284c7;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(14, 165, 233, 0.4);
+}
+
+
 .preview-item .remove-btn {
     position: absolute;
     top: 5px;
@@ -320,6 +566,7 @@ include '../../includes/header.php';
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    z-index: 10;
 }
 
 .preview-item .remove-btn:hover {
@@ -345,8 +592,53 @@ include '../../includes/header.php';
 
 <div class="page-header">
     <h2>🌳 나무 추가</h2>
-    <a href="list.php" class="btn btn-secondary">← 목록으로</a>
+    <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-info" onclick="toggleRecentList()">
+            📋 최근 작업 목록
+        </button>
+        <a href="list.php" class="btn btn-secondary">← 목록으로</a>
+    </div>
 </div>
+
+<!-- 최근 작업 목록 팝업 -->
+<div id="recent-list-popup" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 10px; padding: 30px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3>📋 최근 추가한 나무</h3>
+            <button onclick="toggleRecentList()" class="btn btn-sm btn-secondary">✕ 닫기</button>
+        </div>
+        <div class="recent-trees-list">
+            <?php if (count($recent_trees) > 0): ?>
+                <?php foreach ($recent_trees as $rtree): ?>
+                    <div class="recent-tree-item" onclick="loadRecentTree(<?php echo htmlspecialchars(json_encode($rtree)); ?>)" 
+                         style="padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-weight: 600; color: #1f2937; margin-bottom: 5px;">
+                            🌳 <?php echo htmlspecialchars($rtree['species_name'] ?: '수종 미지정'); ?>
+                            <?php if ($rtree['tree_number']): ?>
+                                <span style="color: #6b7280; font-size: 14px;">(<?php echo htmlspecialchars($rtree['tree_number']); ?>)</span>
+                            <?php endif; ?>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280;">
+                            📍 <?php echo htmlspecialchars($rtree['location_name'] ?: '-'); ?> • 
+                            🏷️ <?php echo htmlspecialchars($rtree['category_name'] ?: '-'); ?> • 
+                            📅 <?php echo date('Y-m-d', strtotime($rtree['created_at'])); ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p style="text-align: center; color: #9ca3af; padding: 40px;">최근 추가한 나무가 없습니다.</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.recent-tree-item:hover {
+    background: #f3f4f6;
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+}
+</style>
 
 <?php if ($error): ?>
     <div class="alert alert-error"><?php echo $error; ?></div>
@@ -421,9 +713,16 @@ include '../../includes/header.php';
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
                 <div class="form-group">
                     <label for="tree_number">나무 번호</label>
-                    <input type="text" id="tree_number" name="tree_number" 
-                           placeholder="예: T-001" 
-                           value="<?php echo isset($_POST['tree_number']) ? htmlspecialchars($_POST['tree_number']) : ''; ?>">
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="tree_number" name="tree_number" 
+                               placeholder="예: T-001" style="flex: 1;"
+                               value="<?php echo isset($_POST['tree_number']) ? htmlspecialchars($_POST['tree_number']) : ''; ?>">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="autoGenerateTreeNumber()" 
+                                title="장소의 다음 번호 자동생성">
+                            🔢 자동
+                        </button>
+                    </div>
+                    <small style="color: #6b7280; font-size: 12px;">장소를 먼저 선택하면 자동 번호를 생성할 수 있습니다.</small>
                 </div>
                 
                 <div class="form-group">
@@ -477,7 +776,7 @@ include '../../includes/header.php';
             </div>
             <div id="map" class="map-container"></div>
             <small style="color: #6b7280; font-size: 13px; margin-top: 5px; display: block;">
-                💡 지도를 클릭하여 나무의 정확한 위치를 지정하세요. (선택사항)
+                💡 사진에 GPS가 있으면 "📍 위치 사용" 버튼이 표시됩니다. 여러 사진의 GPS 평균값도 사용할 수 있습니다.
             </small>
             
             <h4 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 1px solid #eee;">사진 업로드</h4>
@@ -487,7 +786,7 @@ include '../../includes/header.php';
                 <div id="image-previews" class="image-preview-grid"></div>
             </div>
             <small style="color: #6b7280; font-size: 13px; margin-top: 5px; display: block;">
-                💡 나무의 다양한 부위를 촬영하여 업로드하세요. Ctrl(Cmd) 키를 누른 채 여러 파일을 선택할 수 있습니다.
+                💡 첫 번째 사진이 자동으로 대표 사진이 됩니다. GPS 정보가 있는 사진은 나무 위치로 사용할 수 있습니다.
             </small>
             
             <div class="form-group" style="margin-top: 30px;">
@@ -509,10 +808,144 @@ $apiKey = '';
 if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
 ?>
 
+
+<!-- Sortable.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<!-- EXIF.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+
 <?php if ($apiKey != ''): ?>
     <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?php echo $apiKey; ?>"></script>
     <script>
-    // 장소 선택 시 지역/카테고리 자동 설정
+    // PHP 데이터를 JavaScript 변수로 전달
+    const locationSpeciesMap = <?php echo json_encode($location_species_map); ?>;
+    const locationLastNumbers = <?php echo json_encode($location_last_numbers); ?>;
+    const allSpecies = <?php echo json_encode($species_list); ?>;
+    
+    // 최근 작업 목록 팝업 토글
+    function toggleRecentList() {
+        const popup = document.getElementById('recent-list-popup');
+        if (popup.style.display === 'none' || popup.style.display === '') {
+            popup.style.display = 'flex';
+        } else {
+            popup.style.display = 'none';
+        }
+    }
+    
+    // 최근 나무 정보 불러오기
+    function loadRecentTree(treeData) {
+        // 장소
+        if (treeData.location_id) {
+            document.getElementById('location_id').value = treeData.location_id;
+            // 장소 변경 이벤트 발생시켜서 지역/카테고리 자동 설정
+            document.getElementById('location_id').dispatchEvent(new Event('change'));
+        }
+        
+        // 수종
+        if (treeData.species_id) {
+            document.getElementById('species_id').value = treeData.species_id;
+        }
+        
+        // 건강상태
+        if (treeData.health_status) {
+            document.getElementById('health_status').value = treeData.health_status;
+        }
+        
+        // 높이
+        if (treeData.height) {
+            document.getElementById('height').value = treeData.height;
+        }
+        
+        // 직경
+        if (treeData.diameter) {
+            document.getElementById('diameter').value = treeData.diameter;
+        }
+        
+        // 팝업 닫기
+        toggleRecentList();
+        
+        alert('✅ 최근 작업 정보를 불러왔습니다. 나무번호와 위치는 새로 입력해주세요.');
+    }
+    
+    // 나무번호 자동생성
+    function autoGenerateTreeNumber() {
+        const locationId = document.getElementById('location_id').value;
+        
+        if (!locationId) {
+            alert('⚠️ 장소를 먼저 선택해주세요.');
+            return;
+        }
+        
+        const lastNumber = locationLastNumbers[locationId] || 0;
+        const nextNumber = parseInt(lastNumber) + 1;
+        const paddedNumber = 'T-' + String(nextNumber).padStart(3, '0'); // T-001, T-002, ...
+        
+        document.getElementById('tree_number').value = paddedNumber;
+        alert(`✅ 다음 번호가 생성되었습니다: ${paddedNumber}`);
+    }
+    
+    // 장소 선택 시 수종 필터링
+    function filterSpeciesByLocation() {
+        const locationId = document.getElementById('location_id').value;
+        const speciesSelect = document.getElementById('species_id');
+        
+        // 현재 선택된 수종 저장
+        const currentSelected = speciesSelect.value;
+        
+        // 옵션 초기화
+        speciesSelect.innerHTML = '<option value="">선택하세요</option>';
+        
+        if (locationId && locationSpeciesMap[locationId]) {
+            // 해당 장소에 심어진 수종 목록
+            const locationSpecies = locationSpeciesMap[locationId];
+            
+            // 장소별 수종 먼저 추가 (사용 빈도순)
+            const optgroup1 = document.createElement('optgroup');
+            optgroup1.label = '🌟 이 장소에 심어진 수종';
+            locationSpecies.forEach(sp => {
+                const option = document.createElement('option');
+                option.value = sp.species_id;
+                option.textContent = `${sp.korean_name} (${sp.tree_count}그루)`;
+                if (sp.species_id == currentSelected) {
+                    option.selected = true;
+                }
+                optgroup1.appendChild(option);
+            });
+            speciesSelect.appendChild(optgroup1);
+            
+            // 전체 수종 목록 추가
+            const optgroup2 = document.createElement('optgroup');
+            optgroup2.label = '📋 전체 수종';
+            const locationSpeciesIds = locationSpecies.map(s => s.species_id);
+            allSpecies.forEach(sp => {
+                // 이미 위에 표시된 수종은 제외
+                if (!locationSpeciesIds.includes(sp.species_id)) {
+                    const option = document.createElement('option');
+                    option.value = sp.species_id;
+                    option.textContent = `${sp.korean_name} (${sp.scientific_name})`;
+                    if (sp.species_id == currentSelected) {
+                        option.selected = true;
+                    }
+                    optgroup2.appendChild(option);
+                }
+            });
+            speciesSelect.appendChild(optgroup2);
+        } else {
+            // 장소 선택 안됨 - 전체 수종 표시
+            allSpecies.forEach(sp => {
+                const option = document.createElement('option');
+                option.value = sp.species_id;
+                option.textContent = `${sp.korean_name} (${sp.scientific_name})`;
+                if (sp.species_id == currentSelected) {
+                    option.selected = true;
+                }
+                speciesSelect.appendChild(option);
+            });
+        }
+    }
+    
+    // 장소 선택 시 지역/카테고리 자동 설정 + 수종 필터링
     document.getElementById('location_id').addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         const regionId = selectedOption.getAttribute('data-region');
@@ -520,6 +953,9 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
         
         document.getElementById('region_id').value = regionId || '0';
         document.getElementById('category_id').value = categoryId || '0';
+        
+        // 수종 필터링
+        filterSpeciesByLocation();
     });
     
     // 카카오맵 초기화
@@ -546,35 +982,281 @@ if (defined('KAKAO_MAP_API_KEY')) $apiKey = KAKAO_MAP_API_KEY;
         document.getElementById('longitude').value = latlng.getLng();
     });
     
-    // 이미지 미리보기
+    // 전역 변수
+    let photoGpsData = []; // 각 사진의 GPS 데이터
+    let gpsMarkers = []; // 지도 마커 배열
+    
+    // 이미지 미리보기 및 GPS 추출
     function previewImages(input) {
         const preview = document.getElementById('image-previews');
         preview.innerHTML = '';
+        photoGpsData = []; // 초기화
+        
+        // 기존 GPS 마커 제거
+        gpsMarkers.forEach(marker => marker.setMap(null));
+        gpsMarkers = [];
         
         if (input.files && input.files.length > 0) {
+            let loadedCount = 0;
+            const totalFiles = input.files.length;
+            
             Array.from(input.files).forEach((file, index) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const div = document.createElement('div');
-                    div.className = 'preview-item';
-                    div.innerHTML = `
-                        <img src="${e.target.result}" alt="미리보기 ${index + 1}">
-                        <div class="file-info">${file.name}</div>
-                        <select name="photo_types[]" class="type-selector">
-                            <option value="full">전체</option>
-                            <option value="leaf">잎</option>
-                            <option value="bark">수피</option>
-                            <option value="flower">꽃</option>
-                            <option value="fruit">열매</option>
-                            <option value="other">기타</option>
-                        </select>
-                    `;
-                    preview.appendChild(div);
-                };
-                reader.readAsDataURL(file);
+                // GPS 추출
+                EXIF.getData(file, function() {
+                    const lat = EXIF.getTag(this, 'GPSLatitude');
+                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                    const lng = EXIF.getTag(this, 'GPSLongitude');
+                    const lngRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                    
+                    let gpsData = null;
+                    if (lat && lng) {
+                        gpsData = {
+                            latitude: convertDMSToDD(lat, latRef),
+                            longitude: convertDMSToDD(lng, lngRef)
+                        };
+                    }
+                    photoGpsData[index] = gpsData;
+                    
+                    // 미리보기 생성
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const div = document.createElement('div');
+                        div.className = 'preview-item';
+                        if (index === 0) div.classList.add('is-main'); // 첫 번째 = 대표
+                        div.setAttribute('data-index', index);
+                        
+                        let gpsButton = '';
+                        if (gpsData) {
+                            gpsButton = `<button type="button" class="use-gps-btn" onclick="usePhotoGps(${index})" title="이 사진의 GPS를 나무 위치로 사용">📍 위치 사용</button>`;
+                        } else {
+                            gpsButton = '<span class="no-gps-label">GPS 없음</span>';
+                        }
+                        
+                        div.innerHTML = `
+                            <img src="${e.target.result}" alt="미리보기 ${index + 1}">
+                            <div class="drag-handle">⋮⋮</div>
+                            ${index === 0 ? '<span class="main-badge">⭐ 대표</span>' : ''}
+                            ${gpsButton}
+                            <div class="file-info">${file.name}</div>
+                            <select name="photo_types[]" class="type-selector">
+                                <option value="full">전체</option>
+                                <option value="leaf">잎</option>
+                                <option value="bark">수피</option>
+                                <option value="flower">꽃</option>
+                                <option value="fruit">열매</option>
+                                <option value="other">기타</option>
+                            </select>
+                        `;
+                        preview.appendChild(div);
+                        
+                        loadedCount++;
+                        if (loadedCount === totalFiles) {
+                            initSortable();
+                            showAllGpsOnMap();
+                            showGpsAverageButton();
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
             });
         }
     }
+    
+    // DMS(도분초) → DD(십진수) 변환
+    function convertDMSToDD(dms, ref) {
+        if (!dms || dms.length < 3) return null;
+        
+        const degrees = dms[0];
+        const minutes = dms[1];
+        const seconds = dms[2];
+        
+        let dd = degrees + (minutes / 60) + (seconds / 3600);
+        
+        if (ref === 'S' || ref === 'W') {
+            dd = dd * -1;
+        }
+        
+        return dd;
+    }
+    
+    // 사진의 GPS를 나무 위치로 사용
+    function usePhotoGps(index) {
+        const gps = photoGpsData[index];
+        if (!gps) return;
+        
+        document.getElementById('latitude').value = gps.latitude.toFixed(6);
+        document.getElementById('longitude').value = gps.longitude.toFixed(6);
+        
+        // 지도 마커 이동
+        if (marker) marker.setMap(null);
+        const position = new kakao.maps.LatLng(gps.latitude, gps.longitude);
+        marker = new kakao.maps.Marker({ position: position, map: map });
+        map.setCenter(position);
+        map.setLevel(3);
+        
+        // 붉은 테두리 토글
+        document.querySelectorAll('.preview-item').forEach(item => {
+            item.classList.remove('gps-used');
+        });
+        const selectedItem = document.querySelector(`.preview-item[data-index="${index}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('gps-used');
+        }
+        
+        alert('✅ 사진 ' + (index + 1) + '번의 GPS가 나무 위치로 설정되었습니다.');
+    }
+    
+    // 모든 GPS를 지도에 표시
+    function showAllGpsOnMap() {
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'];
+        
+        photoGpsData.forEach((gps, index) => {
+            if (gps) {
+                const position = new kakao.maps.LatLng(gps.latitude, gps.longitude);
+                
+                // CustomOverlay로 색상 마커 생성
+                const content = `
+                    <div style="
+                        background: ${colors[index % colors.length]};
+                        color: white;
+                        padding: 8px 12px;
+                        border-radius: 20px;
+                        font-weight: bold;
+                        font-size: 14px;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                        border: 2px solid white;
+                        cursor: pointer;
+                        white-space: nowrap;
+                    ">📷 사진 ${index + 1}</div>
+                `;
+                
+                const customOverlay = new kakao.maps.CustomOverlay({
+                    position: position,
+                    content: content,
+                    yAnchor: 1.3,
+                    clickable: true
+                });
+                
+                customOverlay.setMap(map);
+                
+                // 클릭 이벤트 (DOM 요소에 직접 추가)
+                setTimeout(() => {
+                    const overlayDiv = customOverlay.a;
+                    if (overlayDiv) {
+                        overlayDiv.onclick = function() {
+                            usePhotoGps(index);
+                        };
+                    }
+                }, 100);
+                
+                gpsMarkers.push(customOverlay);
+            }
+        });
+        
+        // 모든 GPS 마커가 보이도록 지도 범위 조정
+        if (gpsMarkers.length > 0) {
+            const bounds = new kakao.maps.LatLngBounds();
+            photoGpsData.forEach(gps => {
+                if (gps) {
+                    bounds.extend(new kakao.maps.LatLng(gps.latitude, gps.longitude));
+                }
+            });
+            map.setBounds(bounds);
+        }
+    }
+    
+    // GPS 평균값 버튼 표시
+    function showGpsAverageButton() {
+        const validGps = photoGpsData.filter(gps => gps !== null);
+        if (validGps.length >= 2) {
+            const mapContainer = document.getElementById('map');
+            let avgButton = document.getElementById('use-average-gps');
+            
+            if (!avgButton) {
+                avgButton = document.createElement('button');
+                avgButton.id = 'use-average-gps';
+                avgButton.type = 'button';
+                avgButton.className = 'btn btn-info';
+                avgButton.style.marginTop = '10px';
+                avgButton.onclick = useAverageGps;
+                mapContainer.parentNode.insertBefore(avgButton, mapContainer.nextSibling);
+            }
+            
+            avgButton.innerHTML = `📊 GPS 평균값 사용 (${validGps.length}개 사진)`;
+            avgButton.style.display = 'inline-block';
+        }
+    }
+    
+    // GPS 평균값 계산 및 적용
+    function useAverageGps() {
+        const validGps = photoGpsData.filter(gps => gps !== null);
+        if (validGps.length === 0) return;
+        
+        const avgLat = validGps.reduce((sum, gps) => sum + gps.latitude, 0) / validGps.length;
+        const avgLng = validGps.reduce((sum, gps) => sum + gps.longitude, 0) / validGps.length;
+        
+        document.getElementById('latitude').value = avgLat.toFixed(6);
+        document.getElementById('longitude').value = avgLng.toFixed(6);
+        
+        // 지도 마커 이동
+        if (marker) marker.setMap(null);
+        const position = new kakao.maps.LatLng(avgLat, avgLng);
+        marker = new kakao.maps.Marker({ position: position, map: map });
+        map.setCenter(position);
+        map.setLevel(3);
+        
+        alert(`✅ ${validGps.length}개 사진의 평균 GPS가 나무 위치로 설정되었습니다.`);
+    }
+    
+    // Sortable.js 초기화
+    function initSortable() {
+        const preview = document.getElementById('image-previews');
+        if (preview && preview.children.length > 0) {
+            new Sortable(preview, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: function(evt) {
+                    updatePhotoIndices();
+                }
+            });
+        }
+    }
+    
+    // 사진 인덱스 업데이트
+    function updatePhotoIndices() {
+        const items = document.querySelectorAll('.preview-item');
+        const newGpsData = [];
+        
+        items.forEach((item, newIndex) => {
+            const oldIndex = parseInt(item.getAttribute('data-index'));
+            item.setAttribute('data-index', newIndex);
+            newGpsData[newIndex] = photoGpsData[oldIndex];
+            
+            // 첫 번째 사진에만 대표 배지
+            const badge = item.querySelector('.main-badge');
+            if (newIndex === 0) {
+                item.classList.add('is-main');
+                if (!badge) {
+                    const newBadge = document.createElement('span');
+                    newBadge.className = 'main-badge';
+                    newBadge.textContent = '⭐ 대표';
+                    item.insertBefore(newBadge, item.querySelector('.file-info'));
+                }
+            } else {
+                item.classList.remove('is-main');
+                if (badge) badge.remove();
+            }
+            
+            // GPS 버튼 업데이트
+            const gpsBtn = item.querySelector('.use-gps-btn');
+            if (gpsBtn) {
+                gpsBtn.onclick = function() { usePhotoGps(newIndex); };
+            }
+        });
+        
+        photoGpsData = newGpsData;
+    }
+    </script>
     </script>
 <?php else: ?>
     <div class="alert alert-error">

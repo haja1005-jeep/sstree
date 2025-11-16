@@ -1,10 +1,4 @@
 ﻿<?php
-/**
- * 전역 설정 파일
- * Smart Tree Map - Sinan County
- */
-
-// 세션 시작
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
@@ -23,7 +17,7 @@ define('BASE_URL', 'https://www.sstree.or.kr/v2');
 // 업로드 설정
 // [수정] rtrim을 BASE_PATH에 적용하고, DIRECTORY_SEPARATOR를 사용해 OS 호환성 확보
 define('UPLOAD_PATH', rtrim(BASE_PATH, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'photos' . DIRECTORY_SEPARATOR);
-define('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB
+define('MAX_FILE_SIZE', 20 * 1024 * 1024); // 10MB
 
 // [수정] 대소문자, 공백이 섞여도 처리되도록 문자열로 변경
 define('ALLOWED_EXTENSIONS', 'jpg, jpeg, png, gif');
