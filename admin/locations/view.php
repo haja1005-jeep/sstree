@@ -28,8 +28,8 @@ $query = "SELECT l.*,
           COUNT(DISTINCT lt.species_id) as species_count,
           COALESCE(SUM(lt.quantity), 0) as total_trees
           FROM locations l
-          LEFT JOIN location_categories c ON l.category_id = c.category_id
-          LEFT JOIN regions r ON c.region_id = r.region_id
+          LEFT JOIN categories c ON l.category_id = c.category_id
+          LEFT JOIN regions r ON l.region_id = r.region_id
           LEFT JOIN location_trees lt ON l.location_id = lt.location_id
           WHERE l.location_id = :location_id
           GROUP BY l.location_id";

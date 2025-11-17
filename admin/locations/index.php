@@ -31,16 +31,19 @@ $where_conditions = ["1=1"];
 $params = [];
 
 if ($search) {
+    // road_name 컬럼이 존재하는지 확인 필요하지만, 일단 포함
     $where_conditions[] = "(l.location_name LIKE :search OR l.address LIKE :search OR l.road_name LIKE :search)";
     $params[':search'] = "%$search%";
 }
 
 if ($region_filter) {
-    $where_conditions[] = "c.region_id = :region_id";
+    // [수정] c.region_id -> l.region_id 로 변경
+    $where_conditions[] = "l.region_id = :region_id";
     $params[':region_id'] = $region_filter;
 }
 
 if ($category_filter) {
+    // [수정] l.category_id 사용 (이미 맞음)
     $where_conditions[] = "l.category_id = :category_id";
     $params[':category_id'] = $category_filter;
 }
@@ -53,10 +56,11 @@ if ($type_filter) {
 $where_clause = implode(" AND ", $where_conditions);
 
 // 전체 개수 조회
+// [수정] location_categories -> categories, regions JOIN 조건 변경
 $count_query = "SELECT COUNT(*) as total
                 FROM locations l
-                LEFT JOIN location_categories c ON l.category_id = c.category_id
-                LEFT JOIN regions r ON c.region_id = r.region_id
+                LEFT JOIN categories c ON l.category_id = c.category_id
+                LEFT JOIN regions r ON l.region_id = r.region_id
                 WHERE $where_clause";
 
 $count_stmt = $db->prepare($count_query);
@@ -68,6 +72,7 @@ $total_records = $count_stmt->fetch()['total'];
 $total_pages = ceil($total_records / $per_page);
 
 // 장소 목록 조회 (수목 수 포함)
+// [수정] 테이블명 및 조인 조건 수정
 $query = "SELECT 
             l.location_id,
             l.location_name,
@@ -81,8 +86,8 @@ $query = "SELECT
             COUNT(DISTINCT lt.species_id) as species_count,
             COALESCE(SUM(lt.quantity), 0) as total_trees
           FROM locations l
-          LEFT JOIN location_categories c ON l.category_id = c.category_id
-          LEFT JOIN regions r ON c.region_id = r.region_id
+          LEFT JOIN categories c ON l.category_id = c.category_id
+          LEFT JOIN regions r ON l.region_id = r.region_id
           LEFT JOIN location_trees lt ON l.location_id = lt.location_id
           WHERE $where_clause
           GROUP BY l.location_id
@@ -102,10 +107,8 @@ $locations = $stmt->fetchAll();
 $regions_query = "SELECT * FROM regions ORDER BY region_name";
 $regions = $db->query($regions_query)->fetchAll();
 
-$categories_query = "SELECT c.*, r.region_name 
-                     FROM location_categories c
-                     LEFT JOIN regions r ON c.region_id = r.region_id
-                     ORDER BY r.region_name, c.category_name";
+// [수정] 카테고리 쿼리 단순화 (regions와 조인 제거)
+$categories_query = "SELECT * FROM categories ORDER BY category_name";
 $categories = $db->query($categories_query)->fetchAll();
 
 include '../../includes/header.php';
@@ -311,7 +314,6 @@ include '../../includes/header.php';
     </a>
 </div>
 
-<!-- 통계 -->
 <div class="location-stats">
     <div class="stats-grid">
         <div class="stat-item">
@@ -321,6 +323,7 @@ include '../../includes/header.php';
         <div class="stat-item">
             <div class="stat-value">
                 <?php
+                // [수정] location_trees 테이블 사용
                 $total_trees_query = "SELECT SUM(quantity) as total FROM location_trees";
                 $total_trees = $db->query($total_trees_query)->fetch()['total'] ?? 0;
                 echo number_format($total_trees);
@@ -331,6 +334,7 @@ include '../../includes/header.php';
         <div class="stat-item">
             <div class="stat-value">
                 <?php
+                // [수정] location_trees 테이블 사용
                 $total_species_query = "SELECT COUNT(DISTINCT species_id) as total FROM location_trees";
                 $total_species = $db->query($total_species_query)->fetch()['total'] ?? 0;
                 echo number_format($total_species);
@@ -351,7 +355,6 @@ include '../../includes/header.php';
     </div>
 </div>
 
-<!-- 검색 및 필터 -->
 <div class="location-filters">
     <form method="GET" action="">
         <div class="filter-row">
@@ -381,7 +384,7 @@ include '../../includes/header.php';
                     <?php foreach ($categories as $category): ?>
                         <option value="<?php echo $category['category_id']; ?>"
                                 <?php echo $category_filter == $category['category_id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($category['region_name'] . ' - ' . $category['category_name']); ?>
+                            <?php echo htmlspecialchars($category['category_name']); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -408,7 +411,6 @@ include '../../includes/header.php';
     </form>
 </div>
 
-<!-- 장소 목록 -->
 <div class="location-table">
     <?php if (count($locations) > 0): ?>
         <table>
@@ -508,7 +510,6 @@ include '../../includes/header.php';
     <?php endif; ?>
 </div>
 
-<!-- 페이지네이션 -->
 <?php if ($total_pages > 1): ?>
     <div class="pagination">
         <?php if ($page > 1): ?>

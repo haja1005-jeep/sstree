@@ -21,11 +21,13 @@ if (!$location_id) {
     exit;
 }
 
-// 장소 정보 조회
+// 장소 정보 조회 [수정된 부분]
+// location_categories -> categories 로 변경
+// regions 조인을 c.region_id -> l.region_id 로 변경
 $location_query = "SELECT l.*, c.category_name, r.region_name
                    FROM locations l
-                   LEFT JOIN location_categories c ON l.category_id = c.category_id
-                   LEFT JOIN regions r ON c.region_id = r.region_id
+                   LEFT JOIN categories c ON l.category_id = c.category_id
+                   LEFT JOIN regions r ON l.region_id = r.region_id
                    WHERE l.location_id = :location_id";
 $location_stmt = $db->prepare($location_query);
 $location_stmt->bindParam(':location_id', $location_id);

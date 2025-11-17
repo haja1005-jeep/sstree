@@ -83,10 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // 카테고리 목록
-$categories_query = "SELECT c.*, r.region_name 
-                     FROM location_categories c
-                     LEFT JOIN regions r ON c.region_id = r.region_id
-                     ORDER BY r.region_name, c.category_name";
+$categories_query = "SELECT c.* FROM categories c
+                     ORDER BY c.category_name";
 $categories = $db->query($categories_query)->fetchAll();
 
 include '../../includes/header.php';
@@ -241,7 +239,7 @@ include '../../includes/header.php';
                         <?php foreach ($categories as $category): ?>
                             <option value="<?php echo $category['category_id']; ?>"
                                     <?php echo (isset($_POST['category_id']) && $_POST['category_id'] == $category['category_id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($category['region_name'] . ' - ' . $category['category_name']); ?>
+                                <?php echo htmlspecialchars($category['category_name']); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
