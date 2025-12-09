@@ -1,0 +1,1140 @@
+<!-- 제미나이 에서 수정 함 마커 이미지로 표시, 갤러리 라이트 Box 구현, 갤러리 화살표, 모바일 스와이프 기능 추가 2025.10.27-->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>신안군 스마트 트리맵 (스와이프 기능 적용)</title>
+    
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=257fdd3647dd6abdb05eae8681106514"></script>
+    
+    <style>
+        /* --- 1. 기본 스타일 --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+            overflow: hidden; 
+            height: 100vh;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1ff;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a7c24;
+            border-radius: 3px;
+        }
+
+        /* --- 2. 헤더 및 필터 --- */
+        .main-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #2d5016 0%, #3d6b1f 50%, #4a7c24 100%);
+            color: white;
+            padding: 15px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .title-section h1 {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .filter-section {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr) auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .filter-group {
+            position: relative;
+        }
+
+        .filter-label {
+            display: block;
+            font-size: 11px;
+            margin-bottom: 4px;
+            font-weight: 600;
+            opacity: 0.95;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px 35px 10px 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.95);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            appearance: none;
+            transition: all 0.2s;
+            color: #2d5016;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #4a7c24;
+            box-shadow: 0 0 0 2px rgba(74, 124, 36, 0.2);
+        }
+
+        select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .filter-group::after {
+            content: '▼';
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            pointer-events: none;
+            color: #2d5016;
+            font-size: 10px;
+        }
+
+        .btn-search {
+            padding: 10px 20px;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-search:hover {
+            background: #1565c0;
+            transform: translateY(-1px);
+        }
+        
+        /* --- 3. 커스텀 마커 (원형 썸네일) --- */
+        .tree-marker {
+            width: 48px;
+            height: 48px;
+            background-color: #4a7c24; 
+            background-size: cover; 
+            background-position: center;
+            border: 4px solid white;
+            border-radius: 50%; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+        }
+
+        .tree-marker:hover {
+            transform: scale(1.15);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+        }
+
+        /* --- 4. 정보 팝업 (디자인 수정본) --- */
+        .info-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            max-width: 90vw;
+            max-height: 85vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 2000;
+            overflow: hidden;
+            animation: popupSlide 0.3s ease-out;
+        }
+        
+        .info-popup.active { 
+            display: block; 
+        }
+
+        @keyframes popupSlide {
+            from {
+                transform: translate(-50%, -50%) scale(0.9);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.5);
+            z-index: 1999;
+        }
+
+        .popup-overlay.active {
+            display: block;
+        }
+
+        .popup-header {
+            background: linear-gradient(135deg, #2d5016, #4a7c24);
+            color: white;
+            padding: 20px 25px;
+            position: relative;
+        }
+
+        .popup-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .popup-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: rotate(90deg);
+        }
+
+        .popup-body {
+            padding: 25px;
+            max-height: calc(85vh - 150px);
+            overflow-y: auto;
+        }
+
+        .info-section {
+            margin-bottom: 25px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d5016;
+            margin-bottom: 15px;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 15px;
+            padding: 10px 0;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .highlight {
+            color: #4a7c24;
+            font-weight: 700;
+        }
+
+        .description {
+            line-height: 1.7;
+            color: #555;
+            margin-top: 10px;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .gallery-item {
+            position: relative;
+            padding-bottom: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .gallery-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .gallery-item img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* --- 5. 목록 패널 --- */
+        .list-panel {
+            position: fixed;
+            top: 125px; 
+            left: 20px;
+            width: 320px;
+            max-height: calc(100vh - 145px); 
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease-out;
+        }
+
+        .list-header {
+            background: #4a7c24;
+            color: white;
+            padding: 15px 20px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .list-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .list-item {
+            background: #f8f9fa;
+            border-left: 4px solid #4a7c24;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .list-item:hover {
+            background: #e8f5e9;
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .list-item-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #2d5016;
+            margin-bottom: 6px;
+        }
+
+        .list-item-info {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            background: #4a7c24;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        /* --- 6. 라이트박스 (스와이프 기능 포함) --- */
+        .lightbox {
+            display: none; 
+            position: fixed;
+            z-index: 3000; 
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85); 
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none; 
+        }
+
+        .lightbox.active {
+            display: flex; 
+            align-items: center;
+            justify-content: center;
+            opacity: 1; 
+            pointer-events: auto; 
+        }
+
+        .lightbox-content {
+            max-width: 90vw; 
+            max-height: 90vh; 
+            object-fit: contain; 
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .lightbox.active .lightbox-content {
+            transform: scale(1);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .lightbox-close:hover {
+            color: #bbb;
+        }
+        
+        /* (신규) 라이트박스 화살표 */
+        .lightbox-prev,
+        .lightbox-next {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 30px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            padding: 16px;
+            user-select: none; /* 텍스트 선택 방지 */
+            transition: 0.2s;
+        }
+
+        .lightbox-prev { left: 15px; }
+        .lightbox-next { right: 15px; }
+
+        .lightbox-prev:hover,
+        .lightbox-next:hover {
+            color: #bbb;
+        }
+
+
+        /* --- 7. 모바일 반응형 --- */
+        @media (max-width: 768px) {
+            .main-header {
+                padding: 15px;
+            }
+            .title-section h1 {
+                font-size: 18px;
+            }
+            .filter-section {
+                grid-template-columns: 1fr 1fr;
+            }
+            .filter-section .btn-search {
+                grid-column: 1 / -1;
+            }
+        /* (수정) max-height 제거, border-radius는 유지 */
+            .list-panel {
+                top: auto; 
+                bottom: 0; 
+                left: 0;
+                width: 100%;
+                /* max-height: 40vh; <-- 이 줄 삭제 */
+                border-radius: 20px 20px 0 0; 
+            }
+
+            /* (신규) 헤더를 클릭 가능하게 변경 */
+            .list-header {
+                cursor: pointer;
+                user-select: none; /* 텍스트 드래그 방지 */
+            }
+
+            /* (신규) 목록 콘텐츠 기본 상태: 숨김 */
+            .list-content {
+                max-height: 0; /* 높이 0으로 접기 */
+                padding-top: 0;
+                padding-bottom: 0;
+                overflow: hidden;
+                transition: all 0.3s ease-out; /* 부드럽게 열리기 */
+            }
+            
+            /* (신규) 활성화 상태: 목록 콘텐츠 보이기 */
+            .list-panel.active .list-content {
+                max-height: 40vh; /* (수정) 180px -> 40vh (화면 40% 높이) */
+                padding-top: 15px;
+                padding-bottom: 15px;
+                overflow-y: auto; /* (중요) 스크롤 기능 활성화 */
+            }
+
+
+            .gallery {
+                grid-template-columns: 1fr 1fr;
+            }
+            .info-row {
+                grid-template-columns: 100px 1fr;
+            }
+
+            /* (신규) 모바일에서 화살표 숨기기 */
+            .lightbox-prev,
+            .lightbox-next {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="main-header">
+        <div class="header-content">
+            <div class="title-section">
+                <h1>🌳 신안군 스마트 트리맵</h1>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-group">
+                    <label class="filter-label">1. 지역</label>
+                    <select id="region-select" onchange="onRegionChange()">
+                        <option value="">전체</option>
+                        <option value="비금면">비금면</option>
+                        <option value="도초면">도초면</option>
+                        <option value="지도읍">지도읍</option>
+                        <option value="압해읍">압해읍</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">2. 카테고리</label>
+                    <select id="category-select" onchange="onCategoryChange()" disabled>
+                        <option value="">전체</option>
+                        <option value="공원">공원</option>
+                        <option value="생활숲">생활숲</option>
+                        <option value="가로수">가로수</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">3. 장소</label>
+                    <select id="place-select" onchange="onPlaceChange()" disabled>
+                        <option value="">전체</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">4. 나무종류</label>
+                    <select id="tree-select" disabled>
+                        <option value="">전체</option>
+                    </select>
+                </div>
+                <button class="btn-search" onclick="applyFilters()">검색</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="list-panel">
+        <div class="list-header" onclick="toggleListPanel()">
+            나무 목록 (<span id="tree-count">0</span>그루)
+        </div>
+        <div class="list-content" id="tree-list">
+             <div class="empty-state">데이터를 불러오는 중...</div>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="popup-overlay" onclick="closePopup()"></div>
+
+    <div class="info-popup" id="info-popup">
+        <div class="popup-header">
+            <button class="close-btn" onclick="closePopup()">×</button>
+            <div class="popup-title" id="popup-title"></div>
+            <div class="popup-subtitle" id="popup-subtitle"></div>
+        </div>
+        <div class="popup-body">
+            <div class="info-section">
+                <div class="section-header">🌳 기본 정보</div>
+                <div class="info-row">
+                    <div class="info-label">위치</div>
+                    <div class="info-value" id="info-location"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">유형</div>
+                    <div class="info-value" id="info-category"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">주요 수종</div>
+                    <div class="info-value highlight" id="info-tree"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">나무 수량</div>
+                    <div class="info-value highlight" id="info-count"></div>
+                </div>
+            </div>
+            <div class="info-section">
+                <div class="section-header">📋 상세 정보</div>
+                <div class="info-row">
+                    <div class="info-label">조성 연도</div>
+                    <div class="info-value" id="info-year"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">면적</div>
+                    <div class="info-value" id="info-area"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">관리 기관</div>
+                    <div class="info-value" id="info-manager"></div>
+                </div>
+                <div class="description" id="info-description"></div>
+            </div>
+            <div class="info-section">
+                <div class="section-header">📷 갤러리</div>
+                <div class="gallery" id="gallery"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="lightbox" id="lightbox">
+        <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+        
+        <a class="lightbox-prev" onclick="showPrevImage()">&#10094;</a>
+        <a class="lightbox-next" onclick="showNextImage()">&#10095;</a>
+        
+        <img class="lightbox-content" id="lightbox-img" alt="확대 이미지">
+    </div>
+
+    <script>
+        // --- 1. 전역 변수 ---
+        let map;
+        let markers = []; 
+        let allTreeData = []; 
+        let filteredData = []; 
+        let lightboxElement; 
+        
+        // (신규) 라이트박스 스와이프 상태 변수
+        let currentGalleryImages = []; // 현재 갤러리 이미지 목록
+        let currentImageIndex = 0;   // 현재 보고 있는 이미지 순서
+        let touchStartX = 0;         // 터치 시작 X좌표
+        let touchEndX = 0;           // 터치 종료 X좌표
+
+        // --- 2. 초기화 함수 ---
+        async function loadAndInitMap() {
+            try {
+                const response = await fetch('./tree-data.json'); 
+                if (!response.ok) {
+                    throw new Error('데이터를 불러오는 데 실패했습니다.');
+                }
+                allTreeData = await response.json(); 
+                filteredData = [...allTreeData];
+                
+                initMap(); 
+
+                // (수정) 라이트박스 초기화 + 스와이프 이벤트 추가
+                lightboxElement = document.getElementById('lightbox');
+                
+                // 배경 클릭 닫기
+                lightboxElement.addEventListener('click', (e) => {
+                    if (e.target === e.currentTarget) {
+                        closeLightbox();
+                    }
+                });
+
+                // (신규) 모바일 스와이프 이벤트 리스너
+                lightboxElement.addEventListener('touchstart', (e) => {
+                    // 이미지를 클릭했을 때만 스와이프 시작
+                    if (e.target.classList.contains('lightbox-content')) {
+                         touchStartX = e.changedTouches[0].screenX;
+                    }
+                }, { passive: true });
+
+                lightboxElement.addEventListener('touchend', (e) => {
+                    if (touchStartX === 0) return; // touchstart가 이미지에서 시작되지 않았으면 무시
+                    
+                    touchEndX = e.changedTouches[0].screenX;
+                    handleSwipeGesture(); // 스와이프 처리 함수 호출
+                }, { passive: true });
+
+            } catch (error) {
+                console.error(error);
+                // ... (에러 처리)
+            }
+        }
+        
+        function initMap() {
+            if (typeof kakao === 'undefined' || !kakao.maps) {
+                console.log('카카오맵 API 로드 실패');
+                updateList(filteredData);
+                return;
+            }
+
+            const container = document.getElementById('map');
+            const options = {
+                center: new kakao.maps.LatLng(34.8, 126.0),
+                level: 9
+            };
+            map = new kakao.maps.Map(container, options);
+            
+            displayMarkers(filteredData);
+            updateList(filteredData);
+        }
+
+        // --- 3. 마커 및 목록 표시 ---
+        function displayMarkers(data) {
+            if (!map) return;
+
+            markers.forEach(m => m.setMap(null));
+            markers = [];
+
+            const selectedTree = document.getElementById('tree-select').value;
+            
+            data.forEach(item => {
+                
+                const imageUrl = (item.images && item.images.length > 0) ? item.images[0] : null;
+                const defaultIcon = item.category === '공원' ? '🌳' : item.category === '생활숲' ? '🌲' : '🌴';
+
+                if (selectedTree && item.trees && item.trees.length > 0) {
+                    // --- 개별 나무 마커 ---
+                    item.trees.forEach((tree, index) => {
+                        const position = new kakao.maps.LatLng(tree.lat, tree.lng);
+                        const content = document.createElement('div');
+                        content.className = 'tree-marker';
+                        
+                        if (imageUrl) {
+                            content.style.backgroundImage = `url(${imageUrl})`;
+                        } else {
+                            content.innerHTML = defaultIcon;
+                        }
+
+                        content.onclick = () => showTreeDetail(item.id, tree.treeId);
+                        content.title = tree.treeName; 
+                        
+                        const overlay = new kakao.maps.CustomOverlay({
+                            position: position,
+                            content: content,
+                            yAnchor: 0.5,
+                            zIndex: 100
+                        });
+                        
+                        overlay.setMap(map);
+                        markers.push(overlay);
+                    });
+                } else {
+                    // --- 장소 대표 마커 ---
+                    const position = new kakao.maps.LatLng(item.lat, item.lng);
+                    const content = document.createElement('div');
+                    content.className = 'tree-marker';
+
+                    if (imageUrl) {
+                        content.style.backgroundImage = `url(${imageUrl})`;
+                    } else {
+                        content.innerHTML = defaultIcon;
+                    }
+                    
+                    content.onclick = () => showPopup(item.id);
+                    content.title = item.place;
+                    
+                    const overlay = new kakao.maps.CustomOverlay({
+                        position: position,
+                        content: content,
+                        yAnchor: 0.5,
+                        zIndex: 100
+                    });
+                    
+                    overlay.setMap(map);
+                    markers.push(overlay);
+                }
+            });
+
+            // 지도 범위 조절
+            if (markers.length > 0) {
+                const bounds = new kakao.maps.LatLngBounds();
+                data.forEach(item => {
+                    if (selectedTree && item.trees && item.trees.length > 0) {
+                        item.trees.forEach(tree => {
+                            bounds.extend(new kakao.maps.LatLng(tree.lat, tree.lng));
+                        });
+                    } else {
+                        bounds.extend(new kakao.maps.LatLng(item.lat, item.lng));
+                    }
+                });
+                map.setBounds(bounds);
+                console.log('지도 범위 조정 완료');
+            } else if (map) {
+                // 필터 결과가 없어 마커가 0개일 때 기본 위치로 이동
+                 map.setCenter(new kakao.maps.LatLng(34.8, 126.0));
+                 map.setLevel(9);
+            }
+        }
+
+        function updateList(data) {
+            const listContainer = document.getElementById('tree-list');
+            const countElement = document.getElementById('tree-count');
+            
+            const totalCount = data.reduce((sum, item) => sum + item.count, 0);
+            countElement.textContent = totalCount;
+
+            if (data.length === 0) {
+                listContainer.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+                return;
+            }
+
+            listContainer.innerHTML = data.map(item => `
+                <div class="list-item" onclick="showPopup(${item.id})">
+                    <div class="list-item-title">${item.place}</div>
+                    <div class="list-item-info">
+                        <span class="badge">${item.region}</span>
+                        <span class="badge">${item.category}</span>
+                        <span class="badge">${item.tree}</span>
+                        <span class="badge">${item.count}그루</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- 4. 필터 함수 ---
+        function onRegionChange() {
+            const region = document.getElementById('region-select').value;
+            const categorySelect = document.getElementById('category-select');
+            const placeSelect = document.getElementById('place-select');
+            const treeSelect = document.getElementById('tree-select');
+            categorySelect.value = '';
+            placeSelect.value = '';
+            treeSelect.value = '';
+            placeSelect.innerHTML = '<option value="">전체</option>';
+            treeSelect.innerHTML = '<option value="">전체</option>';
+            if (region) {
+                categorySelect.disabled = false;
+            } else {
+                categorySelect.disabled = true;
+                placeSelect.disabled = true;
+                treeSelect.disabled = true;
+            }
+        }
+
+        function onCategoryChange() {
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            const placeSelect = document.getElementById('place-select');
+            const treeSelect = document.getElementById('tree-select');
+            placeSelect.value = '';
+            treeSelect.value = '';
+            treeSelect.innerHTML = '<option value="">전체</option>';
+            if (category) {
+                placeSelect.disabled = false;
+                const places = [...new Set(allTreeData 
+                    .filter(t => t.region === region && t.category === category)
+                    .map(t => t.place))];
+                placeSelect.innerHTML = '<option value="">전체</option>' +
+                    places.map(p => `<option value="${p}">${p}</option>`).join('');
+            } else {
+                placeSelect.disabled = true;
+                placeSelect.innerHTML = '<option value="">전체</option>';
+                treeSelect.disabled = true;
+            }
+        }
+        
+        function onPlaceChange() {
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            const place = document.getElementById('place-select').value;
+            const treeSelect = document.getElementById('tree-select');
+            treeSelect.value = '';
+            if (place) {
+                treeSelect.disabled = false;
+                const trees = [...new Set(allTreeData
+                    .filter(t => t.region === region && t.category === category && t.place === place)
+                    .map(t => t.tree))];
+                treeSelect.innerHTML = '<option value="">전체</option>' +
+                    trees.map(tr => `<option value="${tr}">${tr}</option>`).join('');
+            } else {
+                treeSelect.disabled = false;
+                const trees = [...new Set(allTreeData
+                    .filter(t => t.region === region && t.category === category)
+                    .map(t => t.tree))];
+                treeSelect.innerHTML = '<option value="">전체</option>' +
+                    trees.map(tr => `<option value="${tr}">${tr}</option>`).join('');
+            }
+        }
+
+        function applyFilters() {
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            const place = document.getElementById('place-select').value;
+            const tree = document.getElementById('tree-select').value;
+
+            filteredData = allTreeData.filter(item => { 
+                return (!region || item.region === region) &&
+                       (!category || item.category === category) &&
+                       (!place || item.place === place) &&
+                       (!tree || item.tree === tree);
+            });
+
+            displayMarkers(filteredData);
+            updateList(filteredData);
+        }
+
+        // --- 5. 팝업 함수 ---
+        function showPopup(id) {
+            
+			// (신규) 모바일 목록 패널 닫기
+            document.querySelector('.list-panel').classList.remove('active');
+
+            const item = allTreeData.find(d => d.id === id); 
+            if (!item) return;
+
+            resetPopupLabels(); 
+
+            document.getElementById('popup-title').textContent = item.place;
+            document.getElementById('popup-subtitle').textContent = `${item.region} · ${item.category}`;
+            document.getElementById('info-location').textContent = `${item.region} ${item.place}`;
+            document.getElementById('info-category').textContent = item.category;
+            document.getElementById('info-tree').textContent = item.tree;
+            document.getElementById('info-count').textContent = `${item.count}그루`;
+            document.getElementById('info-year').textContent = `${item.year}년`;
+            document.getElementById('info-area').textContent = item.area;
+            document.getElementById('info-manager').textContent = item.manager;
+            document.getElementById('info-description').textContent = item.description;
+
+            // (수정) 갤러리 이미지에 onclick 이벤트 수정
+            const imageList = item.images;
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = imageList.map((img, index) => `
+                <div class="gallery-item">
+                    <img src="${img}" alt="갤러리" onclick='openLightbox(${JSON.stringify(imageList)}, ${index})'>
+                </div>
+            `).join('');
+
+            document.getElementById('popup-overlay').classList.add('active');
+            document.getElementById('info-popup').classList.add('active');
+
+            if (map) {
+                map.setCenter(new kakao.maps.LatLng(item.lat, item.lng));
+                map.setLevel(5);
+            }
+        }
+        
+        function showTreeDetail(placeId, treeId) {
+
+            // (신규) 모바일 목록 패널 닫기
+            document.querySelector('.list-panel').classList.remove('active');
+
+
+            const place = allTreeData.find(d => d.id === placeId);
+            if (!place) return;
+
+            const tree = place.trees.find(t => t.treeId === treeId);
+            if (!tree) return;
+            
+            resetPopupLabels(); 
+            
+            document.getElementById('popup-title').textContent = tree.treeName;
+            document.getElementById('popup-subtitle').textContent = `${place.region} · ${place.place}`;
+            document.getElementById('info-location').textContent = `${place.region} ${place.place}`;
+            document.getElementById('info-category').textContent = place.category;
+            document.getElementById('info-tree').textContent = tree.treeType || place.tree; 
+            document.getElementById('info-count').textContent = '1그루 (개별 나무)';
+
+            const infoYear = document.getElementById('info-year');
+            const infoArea = document.getElementById('info-area');
+            const infoManager = document.getElementById('info-manager');
+            const infoDescription = document.getElementById('info-description');
+
+            infoYear.parentElement.querySelector('.info-label').textContent = '나무 나이';
+            infoYear.textContent = `${tree.age}년`;
+            
+            infoArea.parentElement.querySelector('.info-label').textContent = '수고 / 흉고직경';
+            infoArea.textContent = `${tree.height} / ${tree.diameter}`;
+            
+            infoManager.parentElement.querySelector('.info-label').textContent = '건강상태';
+            infoManager.textContent = tree.health;
+
+            infoDescription.textContent = `이 나무는 ${tree.treeType || place.tree} 나무로, 높이 ${tree.height}, 흉고직경 ${tree.diameter}의 ${tree.health} 상태입니다. ${place.place}에 위치하고 있으며, 나무 나이는 약 ${tree.age}년입니다.`;
+
+            // (수정) 갤러리 이미지에 onclick 이벤트 수정
+            const imageList = place.images;
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = imageList.map((img, index) => `
+                <div class="gallery-item">
+                    <img src="${img}" alt="나무 사진" onclick='openLightbox(${JSON.stringify(imageList)}, ${index})'>
+                </div>
+            `).join('');
+
+            document.getElementById('popup-overlay').classList.add('active');
+            document.getElementById('info-popup').classList.add('active');
+
+            if (map) {
+                map.setCenter(new kakao.maps.LatLng(tree.lat, tree.lng));
+                map.setLevel(4);
+            }
+        }
+
+        function resetPopupLabels() {
+            document.getElementById('info-year').parentElement.querySelector('.info-label').textContent = '조성 연도';
+            document.getElementById('info-area').parentElement.querySelector('.info-label').textContent = '면적';
+            document.getElementById('info-manager').parentElement.querySelector('.info-label').textContent = '관리 기관';
+        }
+
+        function closePopup() {
+            document.getElementById('popup-overlay').classList.remove('active');
+            document.getElementById('info-popup').classList.remove('active');
+        }
+
+       // --- (신규) 모바일 목록 패널 토글 함수 ---
+        function toggleListPanel() {
+            // 768px 이하 모바일 화면에서만 작동
+            if (window.innerWidth <= 768) { 
+                document.querySelector('.list-panel').classList.toggle('active');
+            }
+        }
+
+        // --- 6. (수정) 라이트박스 함수들 (스와이프 기능 포함) ---
+        
+        /**
+         * (수정) 라이트박스를 엽니다.
+         * @param {string[]} imageList - 갤러리 이미지 URL 배열
+         * @param {number} index - 클릭된 이미지의 순서(index)
+         */
+        function openLightbox(imageList, index) {
+            if (!lightboxElement || !imageList || imageList.length === 0) return;
+            
+            // 전역 변수에 현재 갤러리 상태 저장
+            currentGalleryImages = imageList;
+            currentImageIndex = index;
+            
+            // 새 이미지 표시 함수 호출
+            updateLightboxImage(); 
+            
+            lightboxElement.classList.add('active');
+        }
+
+        /**
+         * (수정) 라이트박스를 닫습니다.
+         */
+        function closeLightbox() {
+            if (!lightboxElement) return;
+            lightboxElement.classList.remove('active');
+            document.getElementById('lightbox-img').src = '';
+            
+            // 상태 초기화
+            currentGalleryImages = [];
+            currentImageIndex = 0;
+            touchStartX = 0;
+            touchEndX = 0;
+        }
+
+        /**
+         * (신규) 현재 인덱스를 기반으로 라이트박스 이미지를 업데이트합니다.
+         */
+        function updateLightboxImage() {
+            if (currentGalleryImages.length === 0) return;
+            
+            const newImageUrl = currentGalleryImages[currentImageIndex];
+            document.getElementById('lightbox-img').src = newImageUrl;
+        }
+
+        /**
+         * (신규) 다음 이미지 표시 (PC 화살표용)
+         */
+        function showNextImage() {
+            currentImageIndex++;
+            if (currentImageIndex >= currentGalleryImages.length) {
+                currentImageIndex = 0;
+            }
+            updateLightboxImage();
+        }
+
+        /**
+         * (신규) 이전 이미지 표시 (PC 화살표용)
+         */
+        function showPrevImage() {
+            currentImageIndex--;
+            if (currentImageIndex < 0) {
+                currentImageIndex = currentGalleryImages.length - 1; 
+            }
+            updateLightboxImage();
+        }
+
+        /**
+         * (신규) 모바일 스와이프 제스처를 처리합니다.
+         */
+        function handleSwipeGesture() {
+            if (touchStartX === 0 || touchEndX === 0) return; 
+
+            const swipeThreshold = 50; // 최소 50px 스와이프
+            const swipeDistance = touchStartX - touchEndX;
+
+            if (swipeDistance > swipeThreshold) {
+                // 왼쪽으로 스와이프 (다음 이미지)
+                showNextImage();
+            } else if (swipeDistance < -swipeThreshold) {
+                // 오른쪽으로 스와_이프 (이전 이미지)
+                showPrevImage();
+            }
+            
+            // 좌표 초기화
+            touchStartX = 0;
+            touchEndX = 0;
+        }
+
+
+        // --- 7. 시작 ---
+        window.onload = loadAndInitMap; 
+    </script>
+</body>
+</html>

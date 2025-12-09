@@ -1,0 +1,1313 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #000;
+    color: #fff;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.main-header {
+    background-color: #1a1a1a;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+    border: 1px solid #333;
+}
+
+.header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.title-section h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #4ade80;
+    margin: 0;
+}
+
+.filter-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 150px;
+}
+
+.filter-label {
+    font-size: 13px;
+    color: #999;
+    font-weight: 500;
+}
+
+.filter-section select {
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 15px;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="white" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 20px;
+    height: 42px;
+}
+
+.filter-section select:hover {
+    background-color: #2a2a2a;
+    border-color: #555;
+}
+
+.filter-section select:disabled {
+    background-color: #222;
+    opacity: 0.5;
+    cursor: not-allowed;
+    color: #666;
+}
+
+.filter-section option {
+    background-color: #2a2a2a;
+    color: #fff;
+}
+
+.btn-search {
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    height: 42px;
+    transition: transform 0.2s;
+}
+
+.btn-search:hover {
+    transform: translateY(-2px);
+}
+
+.upload-area {
+    border: 2px dashed #333;
+    border-radius: 12px;
+    padding: 60px 20px;
+    text-align: center;
+    margin: 30px 0;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.upload-area:hover {
+    border-color: #555;
+    background-color: #0a0a0a;
+}
+
+#uploadPlaceholder {
+    display: block;
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    color: #666;
+}
+
+.upload-text {
+    color: #999;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+.image-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+    display: none;
+}
+
+.image-gallery.show {
+    display: grid;
+}
+
+.gallery-item {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: move;
+    transition: all 0.3s;
+    border: 3px solid transparent;
+    aspect-ratio: 1;
+}
+
+.gallery-item:hover {
+    transform: scale(1.05);
+}
+
+.gallery-item.selected {
+    border-color: #4ade80;
+    box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+}
+
+.gallery-item.sortable-ghost {
+    opacity: 0.4;
+}
+
+.gallery-item.sortable-drag {
+    opacity: 0.8;
+    transform: scale(1.1);
+}
+
+.gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gallery-item-remove {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 10;
+}
+
+.gallery-item:hover .gallery-item-remove {
+    opacity: 1;
+}
+
+.gallery-item-badge {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.gallery-item-order {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background-color: rgba(74, 222, 128, 0.9);
+    color: #000;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.selected-image-display {
+    display: none;
+    margin: 20px 0;
+}
+
+.selected-image-display.show {
+    display: block;
+}
+
+.selected-image-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.selected-image-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #4ade80;
+}
+
+.selected-image-preview {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.image-counter {
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin: 15px 0;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.image-counter.show {
+    display: flex;
+}
+
+.counter-text {
+    color: #4ade80;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.clear-all-btn {
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #ff4444;
+    padding: 6px 15px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.clear-all-btn:hover {
+    background-color: #3a3a3a;
+}
+
+.drag-hint {
+    background-color: rgba(74, 222, 128, 0.1);
+    border: 1px solid #4ade80;
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin: 10px 0;
+    color: #4ade80;
+    font-size: 13px;
+    text-align: center;
+    display: none;
+}
+
+.drag-hint.show {
+    display: block;
+}
+
+.location-section {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+    display: none;
+    border: 1px solid #2a2a4a;
+}
+
+.location-section.show {
+    display: block;
+}
+
+.location-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.location-icon {
+    font-size: 24px;
+}
+
+.location-info {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.location-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.location-row:last-child {
+    border-bottom: none;
+}
+
+.location-label {
+    color: #999;
+    font-size: 14px;
+}
+
+.location-value {
+    color: #fff;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+}
+
+.address-section {
+    background-color: rgba(74, 222, 128, 0.05);
+    border: 1px solid rgba(74, 222, 128, 0.2);
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.address-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: #4ade80;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.address-content {
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.8;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+}
+
+.address-line {
+    display: flex;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.address-line:last-child {
+    border-bottom: none;
+}
+
+.address-label {
+    color: #999;
+    min-width: 80px;
+    font-size: 13px;
+}
+
+.address-value {
+    color: #fff;
+    flex: 1;
+    font-size: 13px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(74, 222, 128, 0.3);
+    border-top-color: #4ade80;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.error-message {
+    color: #ff6b6b;
+    font-size: 13px;
+    padding: 10px;
+    background-color: rgba(255, 107, 107, 0.1);
+    border-radius: 6px;
+}
+
+.copy-address-btn {
+    margin-top: 10px;
+    padding: 8px 15px;
+    background-color: rgba(74, 222, 128, 0.1);
+    border: 1px solid #4ade80;
+    border-radius: 6px;
+    color: #4ade80;
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.3s;
+}
+
+.copy-address-btn:hover {
+    background-color: rgba(74, 222, 128, 0.2);
+}
+
+.google-drive-section {
+    background: linear-gradient(135deg, #4285f4, #34a853);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+    display: none;
+}
+
+.google-drive-section.show {
+    display: block;
+}
+
+.drive-load-section {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.section-header {
+    margin-bottom: 15px;
+}
+
+.section-header h3 {
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.drive-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.drive-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.drive-icon {
+    font-size: 24px;
+}
+
+.sign-in-btn {
+    background-color: white;
+    color: #4285f4;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.sign-in-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.sign-out-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid white;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+
+.sign-out-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.user-info {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+	    margin-top: 8px;
+    margin-bottom: 15px;
+    color: white;
+    font-size: 14px;
+}
+
+.drive-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.drive-upload-btn {
+    flex: 1;
+    min-width: 200px;
+    background-color: white;
+    color: #4285f4;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.drive-upload-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.drive-upload-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.upload-progress {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+    display: none;
+}
+
+.upload-progress.show {
+    display: block;
+}
+
+.progress-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    color: white;
+    font-size: 13px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: white;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.upload-status {
+    min-width: 60px;
+    text-align: right;
+    font-size: 12px;
+}
+
+.success-message {
+    background-color: rgba(52, 168, 83, 0.9);
+    color: white;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.map-container {
+    width: 100%;
+    height: 450px;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 15px;
+    position: relative;
+}
+
+#locationMap {
+    width: 100%;
+    height: 100%;
+}
+
+.map-close-btn {
+    display: none;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    background-color: rgba(0,0,0,0.7);
+    color: white;
+    border: 1px solid white;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.map-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #000;
+}
+
+.map-container.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: #000;
+    margin: 0;
+    border-radius: 0;
+}
+
+.map-container.fullscreen .map-close-btn {
+    display: block;
+}
+
+.location-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.location-btn {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px;
+    background-color: rgba(74, 222, 128, 0.1);
+    border: 1px solid #4ade80;
+    border-radius: 8px;
+    color: #4ade80;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.location-btn:hover:not(:disabled) {
+    background-color: rgba(74, 222, 128, 0.2);
+}
+
+.location-btn:disabled {
+    background-color: rgba(100, 100, 100, 0.1);
+    border-color: #555;
+    color: #666;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.no-location {
+    color: #666;
+    text-align: center;
+    padding: 20px;
+    font-size: 14px;
+}
+
+.prompt-section {
+    margin: 30px 0;
+}
+
+.prompt-label {
+    font-size: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.prompt-textarea {
+    width: 100%;
+    min-height: 120px;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    color: #fff;
+    font-size: 14px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.prompt-textarea::placeholder {
+    color: #666;
+}
+
+.generate-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    padding: 18px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 30px;
+    transition: transform 0.2s;
+}
+
+.generate-btn:hover {
+    transform: translateY(-2px);
+}
+
+.generate-btn:active {
+    transform: translateY(0);
+}
+
+.credit-icon {
+    font-size: 20px;
+}
+
+.recommendations {
+    margin: 30px 0;
+}
+
+.recommendations-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.recommendations-label {
+    color: #999;
+    font-size: 14px;
+}
+
+.refresh-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.recommendations-grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 10px 0;
+}
+
+.recommendation-item {
+    min-width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    object-fit: cover;
+}
+
+.recommendation-item:hover {
+    transform: scale(1.05);
+}
+
+
+
+
+
+/* 1105 추가 -----/
+
+/* 로그인 상태 표시 영역 */
+.login-status-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+/* 로그인 버튼 줄어 드는 문제가 생김 */
+
+#loginContainer {
+    display: block;
+}
+
+#loginContainer.hidden {
+    display: none !important;
+}
+
+
+/*  end -------------- -->
+
+
+
+/* 로그인 컨테이너 - 세로 배치 */
+.login-container {
+    display: flex;
+    flex-direction: column; /* 세로로 쌓기 */
+    gap: 12px; /* 요소 간 간격 */
+    width: 100%;
+}
+
+/* 구글 로그인 버튼 */
+.sign-in-btn {
+    width:100%;
+    background-color: white;
+    color: #4285f4;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sign-in-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.google-icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* 체크박스 컨테이너 */
+.keep-signed-in-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.keep-signed-in-container:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.keep-signed-in-container input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: white;
+}
+
+.keep-signed-in-container label {
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+}
+
+/* 로그아웃 버튼 - 완전 개선 */
+.user-actions {
+    display: flex;
+    gap: 10px;
+}
+.user-info-left {
+    width: 100%;
+}
+
+.sign-out-btn {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: white !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border-radius: 8px !important;
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.sign-out-btn:hover {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.sign-out-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+}
+
+.sign-out-btn::before {
+    content: "🚪";
+    font-size: 14px;
+}
+
+/* 기본 숨김 */
+#userInfo {
+    display: none;
+}
+
+#driveLoadSection {
+    display: none;
+    margin-top: 15px;
+}
+
+#driveActions {
+    display: none;
+    margin-top: 15px;
+}
+
+/* 표시 클래스 */
+#userInfo.show {
+    display: flex !important;
+}
+
+#driveLoadSection.show {
+    display: block !important;
+}
+
+#driveActions.show {
+    display: flex !important;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .login-container {
+        gap: 10px;
+    }
+    
+    .sign-in-btn {
+        padding: 14px 20px;
+        font-size: 15px;
+    }
+    
+    .keep-signed-in-container {
+        padding: 12px;
+    }
+}
+
+
+@media (max-width: 480px) {
+    .sign-in-btn {
+        padding: 16px 24px; /* 터치하기 좋은 크기 */
+        font-size: 16px; /* 가독성 향상 */
+    }
+    
+    .keep-signed-in-container {
+        padding: 14px;
+    }
+    
+    .keep-signed-in-container label {
+        font-size: 15px; /* 모바일에서 읽기 쉽게 */
+    }
+    
+    .keep-signed-in-container input[type="checkbox"] {
+        width: 20px; /* 터치하기 쉽게 */
+        height: 20px;
+    }
+}
+
+
+
+/* ====================================
+   🌳 나무 상세 정보 입력  1105-08
+   ==================================== */
+
+/* 상세 정보 섹션 */
+.tree-details-section {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(56, 142, 60, 0.1));
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 15px;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 가로 배치 */
+.tree-details-section[style*="display: block"] {
+    display: flex !important;
+    gap: 15px;
+	width:100%;
+}
+
+.tree-details-section .input-group {
+    flex: 1;  /* 동일한 너비 */
+}
+.tree-details-section .input-group:last-child {
+    margin-bottom: 0;
+}
+
+.tree-details-section label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2e7d32;
+}
+
+
+
+
+.label-icon {
+    font-size: 18px;
+}
+
+.label-text {
+    font-size: 14px;
+}
+
+/* 단위 포함 입력 필드 */
+.input-with-unit {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-unit input {
+    flex: 1;
+    padding: 12px 50px 12px 15px;
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 8px;
+    font-size: 16px;
+    background-color: white;
+    transition: all 0.3s;
+}
+
+.input-with-unit input:focus {
+    outline: none;
+    border-color: #4caf50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.input-with-unit .unit {
+    position: absolute;
+    right: 15px;
+    color: #4caf50;
+    font-weight: 700;
+    font-size: 14px;
+    pointer-events: none;
+}
+
+/* 상태 선택 */
+#treeStatus {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 8px;
+    font-size: 16px;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.3s;
+    appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="green" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 24px;
+    padding-right: 40px;
+}
+
+#treeStatus:focus {
+    outline: none;
+    border-color: #4caf50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+/* 숫자 입력 스피너 제거 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .tree-details-section {
+        flex-direction: column;
+    }
+    
+    .input-with-unit input {
+        padding: 14px 50px 14px 15px;
+        font-size: 17px;
+    }
+    
+    #treeStatus {
+        padding: 14px 40px 14px 15px;
+        font-size: 17px;
+    }
+    
+    .label-icon {
+        font-size: 20px;
+    }
+    
+    .label-text {
+        font-size: 15px;
+    }
+}
+
+
+
+/* ====================================
+   ✨ 업로드/통합 성공 메시지 (신규)
+   ==================================== */
+
+/* 기존 .success-message (621줄) 오버라이드 */
+.success-message {
+    background: linear-gradient(135deg, #34a853, #2e7d32); /* 구글 그린 그라데이션 */
+    border: 1px solid #4caf50;
+    padding: 20px;
+    margin-top: 15px;
+    display: flex; /* 세로 정렬을 위해 flex로 변경 */
+    flex-direction: column; /* 세로 정렬 */
+    gap: 15px; /* 헤더와 바디 간격 */
+    align-items: flex-start; /* 좌측 정렬 */
+    box-shadow: 0 4px 15px rgba(52, 168, 83, 0.2);
+}
+
+.success-message-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px; /* 폰트 키우기 */
+    font-weight: 600; /* 굵게 */
+    color: white;
+    width: 100%;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.success-message-header .icon {
+    font-size: 24px;
+}
+
+.success-message-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* 정보와 버튼 간격 */
+    width: 100%;
+}
+
+.success-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.15);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: white;
+}
+
+.success-info span:first-child {
+    font-size: 20px;
+}
+
+.success-actions {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    flex-wrap: wrap; /* 모바일에서 줄바꿈 */
+}
+
+.success-btn {
+    flex: 1; /* 버튼들이 공간을 나눠 가짐 */
+    min-width: 150px; /* 최소 너비 */
+    padding: 12px;
+    background: white;
+    color: #34a853; /* 구글 그린 */
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.success-btn:hover {
+    background: #f1f1f1; /* 살짝 어둡게 */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* '새로 업로드' 또는 '확인' 버튼 (보조 버튼) */
+.success-btn.secondary {
+    background: rgba(255, 255, 255, 0.15); /* 투명한 배경 */
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.success-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+    box-shadow: none;
+}

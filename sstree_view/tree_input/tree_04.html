@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>신안군 스마트 트리맵 현장 입력</title>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=257fdd3647dd6abdb05eae8681106514&libraries=services"></script>
+    
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ★★★ [삭제됨] .header (새로운 .main-header로 대체) ★★★ */
+
+        /* ★★★ [새 CSS] main-header (시작) ★★★ */
+        .main-header {
+            background-color: #1a1a1a;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid #333;
+        }
+
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .title-section h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #4ade80; /* 테마 하이라이트 색상 */
+            margin: 0;
+        }
+
+        .filter-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end; /* 버튼과 select 높이 맞춤 */
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .filter-label {
+            font-size: 13px;
+            color: #999;
+            font-weight: 500;
+        }
+        
+        /* select 태그 공통 스타일 */
+        .filter-section select {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="white" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 20px;
+            height: 42px; /* 버튼과 높이 통일 */
+        }
+
+        .filter-section select:hover {
+            background-color: #2a2a2a;
+            border-color: #555;
+        }
+        
+        .filter-section select:disabled {
+            background-color: #222;
+            opacity: 0.5;
+            cursor: not-allowed;
+            color: #666;
+        }
+
+        .filter-section option {
+            background-color: #2a2a2a;
+            color: #fff;
+        }
+
+        .btn-search {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            height: 42px; /* select와 높이 통일 */
+            transition: transform 0.2s;
+        }
+
+        .btn-search:hover {
+            transform: translateY(-2px);
+        }
+        /* ★★★ [새 CSS] main-header (끝) ★★★ */
+
+
+        .upload-area {
+            border: 2px dashed #333;
+            border-radius: 12px;
+            padding: 60px 20px;
+            text-align: center;
+            margin: 30px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-area:hover {
+            border-color: #555;
+            background-color: #0a0a0a;
+        }
+        
+        #uploadPlaceholder {
+            display: block;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #666;
+        }
+
+        .upload-text {
+            color: #999;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .preview-image.show {
+            display: block;
+        }
+
+        .image-actions {
+            display: none;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .image-actions.show {
+            display: flex;
+            justify-content: center;
+        }
+
+        .image-action-btn {
+            padding: 8px 20px;
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .image-action-btn:hover {
+            background-color: #3a3a3a;
+        }
+
+        .recommendations {
+            margin: 30px 0;
+        }
+
+        .recommendations-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .recommendations-label {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .recommendations-grid {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 10px 0;
+        }
+
+        .recommendation-item {
+            min-width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            object-fit: cover;
+        }
+
+        .recommendation-item:hover {
+            transform: scale(1.05);
+        }
+
+        /* ★★★ [삭제됨] .data-select-section ★★★ */
+
+        .prompt-section {
+            margin: 30px 0;
+        }
+
+        .prompt-label {
+            font-size: 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .prompt-textarea {
+            width: 100%;
+            min-height: 120px;
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            color: #fff;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .prompt-textarea::placeholder {
+            color: #666;
+        }
+
+        .generate-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            padding: 18px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
+            transition: transform 0.2s;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .generate-btn:active {
+            transform: translateY(0);
+        }
+
+        .credit-icon {
+            font-size: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .image-gallery.show {
+            display: grid;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 3px solid transparent;
+            aspect-ratio: 1;
+        }
+
+        .gallery-item:hover {
+            transform: scale(1.05);
+        }
+
+        .gallery-item.selected {
+            border-color: #4ade80;
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-item-remove {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .gallery-item:hover .gallery-item-remove {
+            opacity: 1;
+        }
+
+        .gallery-item-badge {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .selected-image-display {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .selected-image-display.show {
+            display: block;
+        }
+
+        .selected-image-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .selected-image-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #4ade80;
+        }
+
+        .selected-image-preview {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .image-counter {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin: 15px 0;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .image-counter.show {
+            display: flex;
+        }
+
+        .counter-text {
+            color: #4ade80;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .clear-all-btn {
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #ff4444;
+            padding: 6px 15px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .clear-all-btn:hover {
+            background-color: #3a3a3a;
+        }
+
+        .location-section {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+            border: 1px solid #2a2a4a;
+        }
+
+        .location-section.show {
+            display: block;
+        }
+
+        .location-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .location-icon {
+            font-size: 24px;
+        }
+
+        .location-info {
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .location-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .location-row:last-child {
+            border-bottom: none;
+        }
+
+        .location-label {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .location-value {
+            color: #fff;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .address-section {
+            background-color: rgba(74, 222, 128, 0.05);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .address-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: #4ade80;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .address-content {
+            color: #fff;
+            font-size: 14px;
+            line-height: 1.8;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+        }
+
+        .address-line {
+            display: flex;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .address-line:last-child {
+            border-bottom: none;
+        }
+
+        .address-label {
+            color: #999;
+            min-width: 80px;
+            font-size: 13px;
+        }
+
+        .address-value {
+            color: #fff;
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(74, 222, 128, 0.3);
+            border-top-color: #4ade80;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            color: #ff6b6b;
+            font-size: 13px;
+            padding: 10px;
+            background-color: rgba(255, 107, 107, 0.1);
+            border-radius: 6px;
+        }
+
+        .copy-address-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: rgba(74, 222, 128, 0.1);
+            border: 1px solid #4ade80;
+            border-radius: 6px;
+            color: #4ade80;
+            font-size: 13px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s;
+        }
+
+        .copy-address-btn:hover {
+            background-color: rgba(74, 222, 128, 0.2);
+        }
+
+        .google-drive-section {
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .google-drive-section.show {
+            display: block;
+        }
+
+        .drive-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .drive-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .drive-icon {
+            font-size: 24px;
+        }
+
+        .sign-in-btn {
+            background-color: white;
+            color: #4285f4;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .sign-in-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .sign-out-btn {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid white;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .sign-out-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .user-info {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .drive-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .drive-upload-btn {
+            flex: 1;
+            min-width: 200px;
+            background-color: white;
+            color: #4285f4;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .drive-upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .drive-upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .upload-progress {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .upload-progress.show {
+            display: block;
+        }
+
+        .progress-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            color: white;
+            font-size: 13px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: white;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .upload-status {
+            min-width: 60px;
+            text-align: right;
+            font-size: 12px;
+        }
+
+        .success-message {
+            background-color: rgba(52, 168, 83, 0.9);
+            color: white;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .map-container {
+            width: 100%;
+            height: 450px; 
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 15px;
+            position: relative;
+        }
+
+        #locationMap {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .map-close-btn {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            border: 1px solid white;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .map-close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.9);
+            color: #000;
+        }
+
+        .map-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            background: #000;
+            margin: 0;
+            border-radius: 0;
+        }
+
+        .map-container.fullscreen .map-close-btn {
+            display: block;
+        }
+
+        .location-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .location-btn {
+            flex: 1;
+            min-width: 120px;
+            padding: 10px;
+            background-color: rgba(74, 222, 128, 0.1);
+            border: 1px solid #4ade80;
+            border-radius: 8px;
+            color: #4ade80;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .location-btn:hover {
+            background-color: rgba(74, 222, 128, 0.2);
+        }
+
+        .no-location {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="main-header">
+            <div class="header-content">
+                <div class="title-section">
+                    <h1>🌳 신안군 스마트 트리맵</h1>
+                </div>
+                
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label class="filter-label" for="region-select">1. 지역</label>
+                        <select id="region-select" onchange="onRegionChange()">
+                            <option value="">전체</option>
+                            <option value="비금면">비금면</option>
+                            <option value="도초면">도초면</option>
+                            <option value="지도읍">지도읍</option>
+                            <option value="압해읍">압해읍</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label" for="category-select">2. 카테고리</label>
+                        <select id="category-select" onchange="onCategoryChange()" disabled>
+                            <option value="">전체</option>
+                            <option value="공원">공원</option>
+                            <option value="생활숲">생활숲</option>
+                            <option value="가로수">가로수</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label" for="place-select">3. 장소</label>
+                        <select id="place-select" onchange="onPlaceChange()" disabled>
+                            <option value="">전체</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label" for="tree-select">4. 나무종류</label>
+                        <select id="tree-select" disabled>
+                            <option value="">전체</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="fileInput" accept="image/jpeg,image/png" multiple>
+            <div id="uploadPlaceholder">
+                <div class="upload-icon">🏞️</div>
+                <div class="upload-text">
+                    현장 사진 (JPG, PNG)을 여기에 드래그하세요<br>
+                    파일 크기 10MB 이하, 크기 300px 이상<br>
+                    <strong>여러 장 선택 가능</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="image-counter" id="imageCounter">
+            <span class="counter-text">📸 <span id="imageCount">0</span>장의 현장 사진</span>
+            <button class="clear-all-btn" onclick="clearAllImages()">🗑️ 모두 삭제</button>
+        </div>
+
+        <div class="image-gallery" id="imageGallery">
+        </div>
+
+        <div class="selected-image-display" id="selectedImageDisplay">
+            <div class="selected-image-header">
+                <span class="selected-image-title">선택된 현장 사진</span>
+            </div>
+            <img id="selectedImagePreview" class="selected-image-preview">
+        </div>
+
+        <div class="recommendations">
+            <div class="recommendations-header">
+                <span class="recommendations-label">추천:</span>
+                <button class="refresh-btn">🔄</button>
+            </div>
+            <div class="recommendations-grid">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=1" class="recommendation-item" alt="추천 1">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=2" class="recommendation-item" alt="추천 2">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=3" class="recommendation-item" alt="추천 3">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=4" class="recommendation-item" alt="추천 4">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=5" class="recommendation-item" alt="추천 5">
+            </div>
+        </div>
+        
+        <div class="prompt-section">
+            <div class="prompt-label">
+                상세 메모
+            </div>
+            <textarea class="prompt-textarea" placeholder="예: 3번 구역 느티나무, 수목 상태 양호, 병충해 없음. (선택한 사진의 EXIF 정보가 여기에 자동으로 표시됩니다.)"></textarea>
+        </div>
+
+        <div class="location-section" id="locationSection">
+            <div class="location-header">
+                <span class="location-icon">📍</span>
+                <span>촬영 위치 정보 (GPS)</span>
+            </div>
+            <div class="location-info" id="locationInfo">
+                <div class="no-location">위치 정보가 없습니다.</div>
+            </div>
+            <div class="map-container" id="mapContainer" style="display: none;">
+                <div id="locationMap"></div>
+                <button class="map-close-btn" onclick="toggleMapFullscreen()">✕ 닫기</button>
+            </div>
+            <div class="location-actions" id="locationActions" style="display: none;">
+                <button class="location-btn" onclick="openKakaoDirections()">🗺️ 카카오 길찾기</button>
+                <button class="location-btn" onclick="copyCoordinates()">📋 좌표 복사</button>
+                <button class="location-btn" onclick="toggleMapFullscreen()">🖥️ 지도 전체화면</button>
+            </div>
+        </div>
+
+        <div class="google-drive-section" id="googleDriveSection">
+            <div class="drive-header">
+                <div class="drive-title">
+                    <span class="drive-icon">📂</span>
+                    <span>Google Drive에 백업</span>
+                </div>
+                <button class="sign-in-btn" id="signInBtn" onclick="handleAuthClick()">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+                        <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+                        <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
+                        <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+                    </svg>
+                    Google 로그인
+                </button>
+                <div id="userInfo" class="user-info" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="userName">로그인됨</span>
+                        <button class="sign-out-btn" onclick="handleSignoutClick()">로그아웃</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="drive-actions" id="driveActions" style="display: none;">
+                <button class="drive-upload-btn" onclick="uploadToGoogleDrive('selected')">
+                    <span>📤</span>
+                    <span>선택된 사진만 업로드</span>
+                </button>
+                <button class="drive-upload-btn" onclick="uploadToGoogleDrive('all')">
+                    <span>📦</span>
+                    <span>모든 사진 업로드</span>
+                </button>
+            </div>
+
+            <div class="upload-progress" id="uploadProgress"></div>
+        </div>
+
+        <button class="generate-btn" onclick="generateVideo()">
+            <span class="credit-icon">💾</span>
+            <span>정보 저장하기</span>
+        </button>
+    </div>
+
+    <script>
+        // Google Drive API Configuration
+        // Get your Client ID from: https://console.cloud.google.com/apis/credentials
+        const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+        const GOOGLE_API_KEY = 'YOUR_GOOGLE_API_KEY';
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        // 장소 및 나무 데이터 불러옴
+		let allTreeData = []; 
+        let filteredData = []; 
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let accessToken = null;
+
+        // Initialize Google API
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            try {
+
+                const response = await fetch('./tree-data.json'); 
+                if (!response.ok) {
+                    throw new Error('데이터를 불러오는 데 실패했습니다.');
+                }
+                allTreeData = await response.json(); 
+                filteredData = [...allTreeData];
+
+                await gapi.client.init({
+                    apiKey: GOOGLE_API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            } catch (error) {
+                console.error('GAPI initialization error:', error);
+            }
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // defined later
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('googleDriveSection').classList.add('show');
+            }
+        }
+
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    throw (resp);
+                }
+                accessToken = gapi.client.getToken().access_token;
+                document.getElementById('signInBtn').style.display = 'none';
+                document.getElementById('userInfo').style.display = 'block';
+                document.getElementById('driveActions').style.display = 'flex';
+                
+                // Get user info
+                try {
+                    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                    const data = await response.json();
+                    document.getElementById('userName').textContent = data.email;
+                } catch (error) {
+                    console.error('Error fetching user info:', error);
+                }
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                accessToken = null;
+                document.getElementById('signInBtn').style.display = 'flex';
+                document.getElementById('userInfo').style.display = 'none';
+                document.getElementById('driveActions').style.display = 'none';
+                document.getElementById('uploadProgress').innerHTML = '';
+                document.getElementById('uploadProgress').classList.remove('show');
+            }
+        }
+
+        async function uploadToGoogleDrive(mode) {
+            if (!accessToken) {
+                alert('먼저 Google 계정으로 로그인해주세요.');
+                return;
+            }
+
+            let imagesToUpload = [];
+            
+            if (mode === 'selected') {
+                if (selectedImageIndex === null) {
+                    alert('업로드할 이미지를 선택해주세요.');
+                    return;
+                }
+                imagesToUpload = [images[selectedImageIndex]];
+            } else {
+                if (images.length === 0) {
+                    alert('업로드할 이미지가 없습니다.');
+                    return;
+                }
+                imagesToUpload = images;
+            }
+
+            const progressContainer = document.getElementById('uploadProgress');
+            progressContainer.innerHTML = '';
+            progressContainer.classList.add('show');
+
+            try {
+                // Create a folder for uploads
+                const folderName = `스마트 트리맵 현장사진 ${new Date().toLocaleDateString('ko-KR')}`;
+                const folderId = await createDriveFolder(folderName);
+
+                for (let i = 0; i < imagesToUpload.length; i++) {
+                    const image = imagesToUpload[i];
+                    const imageIndex = images.indexOf(image);
+                    
+                    // Create progress item
+                    const progressItem = document.createElement('div');
+                    progressItem.className = 'progress-item';
+                    progressItem.innerHTML = `
+                        <span>이미지 ${imageIndex + 1}</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-${i}" style="width: 0%"></div>
+                        </div>
+                        <span class="upload-status" id="status-${i}">0%</span>
+                    `;
+                    progressContainer.appendChild(progressItem);
+
+                    // Upload file
+                    await uploadFileToDrive(image, folderId, i);
+                }
+
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.className = 'success-message';
+                successMsg.innerHTML = `
+                    <span>✅</span>
+                    <span>${imagesToUpload.length}개의 이미지가 성공적으로 업로드되었습니다!</span>
+                `;
+                progressContainer.appendChild(successMsg);
+
+                // Open Drive folder
+                setTimeout(() => {
+                    if (confirm('Google Drive에서 업로드된 파일을 확인하시겠습니까?')) {
+                        window.open(`https://drive.google.com/drive/folders/${folderId}`, '_blank');
+                    }
+                }, 500);
+
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('업로드 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        async function createDriveFolder(folderName) {
+            const metadata = {
+                name: folderName,
+                mimeType: 'application/vnd.google-apps.folder'
+            };
+
+            const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(metadata)
+            });
+
+            const data = await response.json();
+            return data.id;
+        }
+
+        async function uploadFileToDrive(image, folderId, progressIndex) {
+            // Convert base64 to blob
+            const base64Data = image.src.split(',')[1];
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: image.file.type });
+
+            // Create file metadata
+            const fileName = image.file.name;
+            const metadata = {
+                name: fileName,
+                parents: [folderId]
+            };
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', blob);
+
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart');
+                xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        document.getElementById(`progress-${progressIndex}`).style.width = percentComplete + '%';
+                        document.getElementById(`status-${progressIndex}`).textContent = percentComplete + '%';
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        document.getElementById(`status-${progressIndex}`).textContent = '완료 ✓';
+                        resolve(JSON.parse(xhr.responseText));
+                    } else {
+                        reject(new Error(`Upload failed: ${xhr.status}`));
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    reject(new Error('Upload failed'));
+                });
+
+                xhr.send(form);
+            });
+        }
+
+        // Load Google APIs
+        if (typeof gapi !== 'undefined') {
+            gapiLoaded();
+        }
+        window.addEventListener('load', () => {
+            if (typeof google !== 'undefined') {
+                gisLoaded();
+            }
+        });
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const imageGallery = document.getElementById('imageGallery');
+        const imageCounter = document.getElementById('imageCounter');
+        const imageCount = document.getElementById('imageCount');
+        const selectedImageDisplay = document.getElementById('selectedImageDisplay');
+        const selectedImagePreview = document.getElementById('selectedImagePreview');
+
+        let images = []; // Array to store all uploaded images
+        let selectedImageIndex = null;
+        let map = null;
+        let markers = [];
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#4ade80';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#333';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#333';
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type.match('image.*'));
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        });
+
+        function handleFiles(files) {
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const imageData = {
+                        id: Date.now() + Math.random(),
+                        src: e.target.result,
+                        file: file,
+                        exif: null,
+                        location: null,
+                        address: null,
+                        addressLoading: false
+                    };
+
+                    images.push(imageData);
+                    
+                    // Extract EXIF data
+                    const img = new Image();
+                    img.onload = function() {
+                        EXIF.getData(img, function() {
+                            const exifData = EXIF.getAllTags(this);
+                            imageData.exif = exifData;
+                            
+                            // Extract location if available
+                            if (exifData.GPSLatitude && exifData.GPSLongitude) {
+                                const lat = convertDMSToDD(exifData.GPSLatitude, exifData.GPSLatitudeRef);
+                                const lng = convertDMSToDD(exifData.GPSLongitude, exifData.GPSLongitudeRef);
+                                imageData.location = { lat, lng };
+                                
+                                // Fetch address for this location
+                                fetchAddress(imageData);
+                            }
+                            
+                            updateUI();
+                        });
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // Clear file input
+            fileInput.value = '';
+        }
+
+        async function fetchAddress(imageData) {
+            if (!imageData.location) return;
+            
+            // Check if Kakao Maps API is loaded
+            if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) {
+                console.warn('Kakao Maps API not loaded, skipping address lookup');
+                return;
+            }
+            
+            imageData.addressLoading = true;
+            
+            try {
+                const geocoder = new kakao.maps.services.Geocoder();
+                
+                // Convert coordinates to address using Kakao Geocoder
+                geocoder.coord2Address(imageData.location.lng, imageData.location.lat, function(result, status) {
+                    if (status === kakao.maps.services.Status.OK) {
+                        // Format address data to match our display structure
+                        const address = result[0];
+                        const roadAddress = address.road_address;
+                        const jibunAddress = address.address;
+                        
+                        // Create display_name similar to Nominatim format
+                        let displayName = '';
+                        if (roadAddress) {
+                            displayName = roadAddress.address_name;
+                        } else if (jibunAddress) {
+                            displayName = jibunAddress.address_name;
+                        }
+                        
+                        // Create structured address object
+                        imageData.address = {
+                            display_name: displayName,
+                            address: {
+                                country: '대한민국',
+                                state: jibunAddress?.region_1depth_name || '',
+                                city: jibunAddress?.region_2depth_name || '',
+                                district: jibunAddress?.region_3depth_name || '',
+                                road: roadAddress?.road_name || '',
+                                building: roadAddress?.building_name || '',
+                                postcode: roadAddress?.zone_no || jibunAddress?.zip_code || ''
+                            },
+                            road_address: roadAddress,
+                            jibun_address: jibunAddress
+                        };
+                        
+                        imageData.addressLoading = false;
+                        
+                        // Update UI if this image is currently selected
+                        const imageIndex = images.indexOf(imageData);
+                        if (imageIndex === selectedImageIndex) {
+                            displayAllLocations();
+                        }
+                        
+                        // Update map marker popup
+                        updateMapMarkers();
+                    } else {
+                        imageData.address = { error: '주소를 가져올 수 없습니다.' };
+                        imageData.addressLoading = false;
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Address fetch error:', error);
+                imageData.address = { error: '주소 조회 중 오류가 발생했습니다.' };
+                imageData.addressLoading = false;
+            }
+            
+            // Add small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        function updateMapMarkers() {
+            if (!map || markers.length === 0) return;
+            
+            const imagesWithLocation = images.filter(img => img.location);
+            
+            imagesWithLocation.forEach((img, idx) => {
+                const imageIndex = images.indexOf(img);
+                const isSelected = imageIndex === selectedImageIndex;
+                
+                if (markers[idx] && markers[idx].infowindow) {
+                    let popupContent = `<div style="padding:10px;min-width:200px;background:white;border-radius:8px;">`;
+                    popupContent += `<strong style="color:#333;">📷 이미지 ${imageIndex + 1}${isSelected ? ' (선택됨)' : ''}</strong><br>`;
+                    popupContent += `<span style="color:#666;font-size:12px;">위도: ${img.location.lat.toFixed(6)}°<br>경도: ${img.location.lng.toFixed(6)}°</span>`;
+                    
+                    if (img.address && img.address.display_name) {
+                        popupContent += `<br><br><span style="color:#4ade80;font-size:12px;">🏠 ${img.address.display_name}</span>`;
+                    } else if (img.addressLoading) {
+                        popupContent += `<br><br><span style="color:#999;font-size:12px;">⏳ 주소 조회 중...</span>`;
+                    }
+                    
+                    popupContent += `</div>`;
+                    
+                    markers[idx].infowindow.setContent(popupContent);
+                }
+            });
+        }
+
+        function updateUI() {
+            if (images.length > 0) {
+                imageGallery.classList.add('show');
+                imageCounter.classList.add('show');
+                imageCount.textContent = images.length;
+                
+                renderGallery();
+                
+                // Select first image if none selected
+                if (selectedImageIndex === null) {
+                    selectImage(0);
+                }
+            } else {
+                imageGallery.classList.remove('show');
+                imageCounter.classList.remove('show');
+                selectedImageDisplay.classList.remove('show');
+            }
+        }
+
+        function renderGallery() {
+            imageGallery.innerHTML = '';
+            
+            images.forEach((image, index) => {
+                const galleryItem = document.createElement('div');
+                galleryItem.className = 'gallery-item';
+                if (index === selectedImageIndex) {
+                    galleryItem.classList.add('selected');
+                }
+                
+                const img = document.createElement('img');
+                img.src = image.src;
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'gallery-item-remove';
+                removeBtn.innerHTML = '✕';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeImage(index);
+                };
+                
+                const badge = document.createElement('div');
+                badge.className = 'gallery-item-badge';
+                if (image.location) {
+                    badge.innerHTML = '📍 GPS';
+                } else {
+                    badge.innerHTML = '📷 ' + (index + 1);
+                }
+                
+                galleryItem.appendChild(img);
+                galleryItem.appendChild(removeBtn);
+                galleryItem.appendChild(badge);
+                
+                galleryItem.onclick = () => selectImage(index);
+                
+                imageGallery.appendChild(galleryItem);
+            });
+        }
+
+        function selectImage(index) {
+            selectedImageIndex = index;
+            const image = images[index];
+            
+            // Update selected image display
+            selectedImagePreview.src = image.src;
+            selectedImageDisplay.classList.add('show');
+            
+            // Update EXIF info in textarea
+            const promptTextarea = document.querySelector('.prompt-textarea');
+            if (image.exif) {
+                promptTextarea.value = formatExifData(image.exif, index + 1);
+            }
+            
+            // Update location section for all images
+            displayAllLocations();
+            
+            // Update gallery selection
+            renderGallery();
+        }
+
+        function removeImage(index) {
+            images.splice(index, 1);
+            
+            if (selectedImageIndex === index) {
+                selectedImageIndex = images.length > 0 ? 0 : null;
+            } else if (selectedImageIndex > index) {
+                selectedImageIndex--;
+            }
+            
+            updateUI();
+            
+            if (images.length > 0) {
+                selectImage(selectedImageIndex);
+            } else {
+                const promptTextarea = document.querySelector('.prompt-textarea');
+                promptTextarea.value = '';
+                const locationSection = document.getElementById('locationSection');
+                locationSection.classList.remove('show');
+                if (map) {
+                    map = null;
+                }
+            }
+        }
+
+        function clearAllImages() {
+            if (confirm('모든 이미지를 삭제하시겠습니까?')) {
+                images = [];
+                selectedImageIndex = null;
+                markers = [];
+                
+                updateUI();
+                
+                const promptTextarea = document.querySelector('.prompt-textarea');
+                promptTextarea.value = '';
+                
+                const locationSection = document.getElementById('locationSection');
+                locationSection.classList.remove('show');
+                
+                if (map) {
+                    map = null;
+                }
+            }
+        }
+
+        function displayAllLocations() {
+            const locationSection = document.getElementById('locationSection');
+            const locationInfo = document.getElementById('locationInfo');
+            const mapContainer = document.getElementById('mapContainer');
+            const locationActions = document.getElementById('locationActions');
+            
+            // Get all images with location
+            const imagesWithLocation = images.filter(img => img.location);
+            
+            if (imagesWithLocation.length > 0) {
+                locationSection.classList.add('show');
+                
+                // Display info for all locations
+                let locationHTML = `<div style="margin-bottom: 10px; color: #4ade80; font-weight: 500;">📍 ${imagesWithLocation.length}개의 위치 정보</div>`;
+                
+                imagesWithLocation.forEach((img, idx) => {
+                    const imageIndex = images.indexOf(img);
+                    const isSelected = imageIndex === selectedImageIndex;
+                    locationHTML += `<div class="location-row" style="${isSelected ? 'background-color: rgba(74, 222, 128, 0.1); border-radius: 6px; padding: 8px;' : ''}">
+                        <span class="location-label">${isSelected ? '🌟 ' : ''}이미지 ${imageIndex + 1}</span>
+                        <span class="location-value">${img.location.lat.toFixed(6)}°, ${img.location.lng.toFixed(6)}°</span>
+                    </div>`;
+                    
+                    // Display address if available and this is the selected image
+                    if (isSelected) {
+                        if (img.addressLoading) {
+                            locationHTML += `<div class="address-section">
+                                <div class="address-header">
+                                    <span class="loading-spinner"></span>
+                                    <span>주소 조회 중...</span>
+                                </div>
+                            </div>`;
+                        } else if (img.address) {
+                            if (img.address.error) {
+                                locationHTML += `<div class="address-section">
+                                    <div class="address-header">🏠 주소 정보</div>
+                                    <div class="error-message">${img.address.error}</div>
+                                </div>`;
+                            } else {
+                                locationHTML += generateAddressHTML(img.address, imageIndex);
+                            }
+                        }
+                    }
+                });
+                
+                locationInfo.innerHTML = locationHTML;
+                
+                // Show map and actions
+                mapContainer.style.display = 'block';
+                locationActions.style.display = 'flex';
+                
+                // Initialize map with all locations
+                setTimeout(() => {
+                    initMapWithMultipleLocations(imagesWithLocation);
+                }, 100);
+                
+            } else {
+                locationSection.classList.add('show');
+                locationInfo.innerHTML = '<div class="no-location">업로드된 이미지에 위치 정보가 포함되어 있지 않습니다.</div>';
+                mapContainer.style.display = 'none';
+                locationActions.style.display = 'none';
+            }
+        }
+
+        function generateAddressHTML(address, imageIndex) {
+            let html = '<div class="address-section">';
+            html += '<div class="address-header">🏠 주소 정보</div>';
+            html += '<div class="address-content">';
+            
+            // Full display name
+            if (address.display_name) {
+                html += `<div class="address-line">
+                    <span class="address-label">📮 전체 주소</span>
+                    <span class="address-value">${address.display_name}</span>
+                </div>`;
+            }
+            
+            const addr = address.address || {};
+            
+            // Road address (도로명 주소)
+            if (address.road_address) {
+                const road = address.road_address;
+                html += `<div class="address-line">
+                    <span class="address-label">🛣️ 도로명</span>
+                    <span class="address-value">${road.address_name || ''}</span>
+                </div>`;
+            }
+            
+            // Jibun address (지번 주소)
+            if (address.jibun_address) {
+                const jibun = address.jibun_address;
+                html += `<div class="address-line">
+                    <span class="address-label">📍 지번</span>
+                    <span class="address-value">${jibun.address_name || ''}</span>
+                </div>`;
+            }
+            
+            // Country
+            if (addr.country) {
+                html += `<div class="address-line">
+                    <span class="address-label">🌍 국가</span>
+                    <span class="address-value">${addr.country}</span>
+                </div>`;
+            }
+            
+            // State/Province (시/도)
+            if (addr.state) {
+                html += `<div class="address-line">
+                    <span class="address-label">📍 시/도</span>
+                    <span class="address-value">${addr.state}</span>
+                </div>`;
+            }
+            
+            // City (시/군/구)
+            if (addr.city) {
+                html += `<div class="address-line">
+                    <span class="address-label">🏙️ 시/군/구</span>
+                    <span class="address-value">${addr.city}</span>
+                </div>`;
+            }
+            
+            // District (동/읍/면)
+            if (addr.district) {
+                html += `<div class="address-line">
+                    <span class="address-label">🏘️ 동/읍/면</span>
+                    <span class="address-value">${addr.district}</span>
+                </div>`;
+            }
+            
+            // Building
+            if (addr.building) {
+                html += `<div class="address-line">
+                    <span class="address-label">🏢 건물명</span>
+                    <span class="address-value">${addr.building}</span>
+                </div>`;
+            }
+            
+            // Postcode
+            if (addr.postcode) {
+                html += `<div class="address-line">
+                    <span class="address-label">📬 우편번호</span>
+                    <span class="address-value">${addr.postcode}</span>
+                </div>`;
+            }
+            
+            html += '</div>';
+            html += `<button class="copy-address-btn" onclick="copyAddress(${imageIndex})">📋 주소 복사</button>`;
+            html += '</div>';
+            
+            return html;
+        }
+
+        function copyAddress(imageIndex) {
+            const image = images[imageIndex];
+            if (image && image.address && image.address.display_name) {
+                navigator.clipboard.writeText(image.address.display_name)
+                    .then(() => {
+                        alert('주소가 클립보드에 복사되었습니다! 📋');
+                    })
+                    .catch(err => {
+                        console.error('주소 복사 실패: ', err);
+                        alert('주소 복사에 실패했습니다. (HTTPS 환경에서 실행했는지 확인하세요)');
+                    });
+            }
+        }
+
+        function initMapWithMultipleLocations(imagesWithLocation) {
+            const mapElement = document.getElementById('locationMap');
+            
+            // Check if Kakao Maps API is loaded
+            if (typeof kakao === 'undefined' || !kakao.maps) {
+                mapElement.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#1a1a1a;color:#ff6b6b;padding:20px;text-align:center;border-radius:8px;">
+                        <div>
+                            <div style="font-size:40px;margin-bottom:10px;">🗺️</div>
+                            <div style="font-size:14px;margin-bottom:10px;"><strong>카카오맵 API 키가 필요합니다</strong></div>
+                            <div style="font-size:12px;color:#999;line-height:1.6;">
+                                1. <a href="https://developers.kakao.com/" target="_blank" style="color:#4ade80;">developers.kakao.com</a>에서 앱 등록<br>
+                                2. JavaScript 키를 복사<br>
+                                3. HTML 파일의 YOUR_APP_KEY를 교체
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Remove existing map if any
+            if (map) {
+                map = null;
+            }
+            
+            markers = [];
+            
+            // Get center point
+            const lats = imagesWithLocation.map(img => img.location.lat);
+            const lngs = imagesWithLocation.map(img => img.location.lng);
+            const centerLat = lats.reduce((a, b) => a + b) / lats.length;
+            const centerLng = lngs.reduce((a, b) => a + b) / lngs.length;
+            
+            try {
+                // Create Kakao map
+                const mapContainer = document.getElementById('locationMap');
+                const mapOption = {
+                    center: new kakao.maps.LatLng(centerLat, centerLng),
+                    level: imagesWithLocation.length === 1 ? 3 : 5
+                };
+                
+                map = new kakao.maps.Map(mapContainer, mapOption);
+                
+                // Add markers for all locations
+                const bounds = new kakao.maps.LatLngBounds();
+                
+                imagesWithLocation.forEach((img, idx) => {
+                    const imageIndex = images.indexOf(img);
+                    const isSelected = imageIndex === selectedImageIndex;
+                    
+                    const position = new kakao.maps.LatLng(img.location.lat, img.location.lng);
+                    
+                    // Create marker with custom image for selected item
+                    let markerImage = null;
+                    if (isSelected) {
+                        const imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png';
+                        const imageSize = new kakao.maps.Size(64, 69);
+                        const imageOption = { offset: new kakao.maps.Point(27, 69) };
+                        markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+                    }
+                    
+                    const marker = new kakao.maps.Marker({
+                        position: position,
+                        map: map,
+                        image: markerImage
+                    });
+                    
+                    // Create popup content
+                    let popupContent = `<div style="padding:10px;min-width:200px;background:white;border-radius:8px;">`;
+                    popupContent += `<strong style="color:#333;">📷 이미지 ${imageIndex + 1}${isSelected ? ' (선택됨)' : ''}</strong><br>`;
+                    popupContent += `<span style="color:#666;font-size:12px;">위도: ${img.location.lat.toFixed(6)}°<br>경도: ${img.location.lng.toFixed(6)}°</span>`;
+                    
+                    if (img.address && img.address.display_name) {
+                        popupContent += `<br><br><span style="color:#4ade80;font-size:12px;">🏠 ${img.address.display_name}</span>`;
+                    } else if (img.addressLoading) {
+                        popupContent += `<br><br><span style="color:#999;font-size:12px;">⏳ 주소 조회 중...</span>`;
+                    }
+                    
+                    popupContent += `</div>`;
+                    
+                    // Create InfoWindow
+                    const infowindow = new kakao.maps.InfoWindow({
+                        content: popupContent,
+                        removable: true
+                    });
+                    
+                    // Add click event to marker
+                    kakao.maps.event.addListener(marker, 'click', function() {
+                        // Close all other infowindows
+                        markers.forEach(m => {
+                            if (m.infowindow) {
+                                m.infowindow.close();
+                            }
+                        });
+                        infowindow.open(map, marker);
+                    });
+                    
+                    // Open infowindow for selected marker
+                    if (isSelected) {
+                        infowindow.open(map, marker);
+                    }
+                    
+                    markers.push({ marker, infowindow, imageIndex });
+                    bounds.extend(position);
+                });
+                
+                // Fit bounds to show all markers
+                if (imagesWithLocation.length > 1) {
+                    map.setBounds(bounds);
+                }
+            } catch (error) {
+                console.error('Map initialization error:', error);
+                mapElement.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#1a1a1a;color:#ff6b6b;padding:20px;text-align:center;">
+                        <div>지도 로딩 중 오류가 발생했습니다.<br><span style="font-size:12px;color:#999;">${error.message}</span></div>
+                    </div>
+                `;
+            }
+        }
+        
+        function toggleMapFullscreen() {
+            const mapContainer = document.getElementById('mapContainer');
+            const isFullscreen = mapContainer.classList.toggle('fullscreen');
+
+            if (map) {
+                // 지도가 CSS 변경사항을 인지하고 크기를 재조정하도록 함
+                setTimeout(() => {
+                    map.relayout();
+                    
+                    const imagesWithLocation = images.filter(img => img.location);
+                    if (imagesWithLocation.length > 0) {
+                        const bounds = new kakao.maps.LatLngBounds();
+                        imagesWithLocation.forEach(img => {
+                            bounds.extend(new kakao.maps.LatLng(img.location.lat, img.location.lng));
+                        });
+                        map.setBounds(bounds);
+                    }
+                    
+                }, 100); // 100ms 딜레이
+            }
+        }
+
+        function convertDMSToDD(dms, ref) {
+            if (!dms || dms.length < 3) return 0;
+            
+            const degrees = dms[0];
+            const minutes = dms[1];
+            const seconds = dms[2];
+            
+            let dd = degrees + minutes/60 + seconds/3600;
+            
+            if (ref === 'S' || ref === 'W') {
+                dd = dd * -1;
+            }
+            
+            return dd;
+        }
+
+        function openKakaoDirections() { 
+            const imagesWithLocation = images.filter(img => img.location);
+            
+            if (imagesWithLocation.length > 0) {
+                
+                // 1순위: 현재 선택된 이미지, 2순위: 위치가 있는 첫 번째 이미지
+                const selectedImage = images[selectedImageIndex];
+                const imageToUse = (selectedImage && selectedImage.location) ? selectedImage : imagesWithLocation[0];
+                
+                const loc = imageToUse.location;
+                
+                // 목적지 이름 설정 (주소 > "현장 위치")
+                let destinationName = "현장 위치"; // 주소가 없을 경우 기본값
+                if (imageToUse.address && imageToUse.address.display_name) {
+                    destinationName = imageToUse.address.display_name;
+                }
+
+                const encodedName = encodeURIComponent(destinationName);
+
+                // 카카오 길찾기 URL 형식
+                const url = `https://map.kakao.com/link/to/${encodedName},${loc.lat},${loc.lng}`;
+                
+                window.open(url, '_blank');
+            }
+        }
+
+        function copyCoordinates() {
+            const imagesWithLocation = images.filter(img => img.location);
+            if (imagesWithLocation.length > 0) {
+                const coords = imagesWithLocation.map((img, idx) => {
+                    const imageIndex = images.indexOf(img);
+                    let text = `이미지 ${imageIndex + 1}: ${img.location.lat.toFixed(6)}, ${img.location.lng.toFixed(6)}`;
+                    if (img.address && img.address.display_name) {
+                        text += `\n주소: ${img.address.display_name}`;
+                    }
+                    return text;
+                }).join('\n\n');
+                
+                navigator.clipboard.writeText(coords)
+                    .then(() => {
+                        alert('모든 좌표와 주소가 클립보드에 복사되었습니다! 📋');
+                    })
+                    .catch(err => {
+                        console.error('좌표 복사 실패: ', err);
+                        alert('좌표 복사에 실패했습니다. (HTTPS 환경에서 실행했는지 확인하세요)');
+                    });
+            }
+        }
+
+        function formatExifData(exif, imageNumber) {
+            let exifText = `📷 이미지 ${imageNumber} EXIF 정보:\n\n`;
+            
+            // Camera information
+            if (exif.Make || exif.Model) {
+                exifText += `카메라: ${exif.Make || ''} ${exif.Model || ''}\n`;
+            }
+            
+            // Date and time
+            if (exif.DateTime || exif.DateTimeOriginal) {
+                exifText += `촬영 날짜: ${exif.DateTime || exif.DateTimeOriginal}\n`;
+            }
+            
+            // Exposure settings
+            if (exif.ExposureTime) {
+                const shutterSpeed = exif.ExposureTime < 1 
+                    ? `1/${Math.round(1/exif.ExposureTime)}`
+                    : exif.ExposureTime;
+                exifText += `셔터 속도: ${shutterSpeed}s\n`;
+            }
+            
+            if (exif.FNumber) {
+                exifText += `조리개: f/${exif.FNumber}\n`;
+            }
+            
+            if (exif.ISOSpeedRatings) {
+                exifText += `ISO: ${exif.ISOSpeedRatings}\n`;
+            }
+            
+            if (exif.FocalLength) {
+                exifText += `초점 거리: ${exif.FocalLength}mm\n`;
+            }
+            
+            // Lens information
+            if (exif.LensModel) {
+                exifText += `렌즈: ${exif.LensModel}\n`;
+            }
+            
+            // Image dimensions
+            if (exif.PixelXDimension && exif.PixelYDimension) {
+                exifText += `해상도: ${exif.PixelXDimension} × ${exif.PixelYDimension}\n`;
+            }
+            
+            // White balance
+            if (exif.WhiteBalance !== undefined) {
+                const wb = exif.WhiteBalance === 0 ? '자동' : '수동';
+                exifText += `화이트 밸런스: ${wb}\n`;
+            }
+            
+            // Flash
+            if (exif.Flash !== undefined) {
+                const flash = exif.Flash === 0 ? '플래시 없음' : '플래시 사용';
+                exifText += `플래시: ${flash}\n`;
+            }
+            
+            // Software
+            if (exif.Software) {
+                exifText += `\n소프트웨어: ${exif.Software}\n`;
+            }
+            
+            // If no EXIF data found
+            if (Object.keys(exif).length === 0) {
+                return `이미지 ${imageNumber}에서 EXIF 정보를 찾을 수 없습니다.\n\n수목 상태, 병충해 여부 등 상세 메모를 입력하세요.`;
+            }
+            
+            exifText += "\n---\n수목 상태, 병충해 여부 등 상세 메모를 입력하세요."
+            return exifText;
+        }
+
+        function generateVideo() {
+            // "정보 저장하기" 버튼의 기능
+            if (images.length === 0) {
+                alert('먼저 현장 사진을 업로드해주세요! 📸');
+                return;
+            }
+            
+            // 1. Google Drive에 업로드할지 물어보기
+            if (accessToken && confirm('Google Drive에 모든 사진을 업로드하시겠습니까?')) {
+                uploadToGoogleDrive('all');
+            } else if (!accessToken) {
+                alert('정보가 로컬에 임시 저장되었습니다.\n(백업을 위해 Google Drive 로그인을 권장합니다.)');
+            } else {
+                 alert('정보가 로컬에 임시 저장되었습니다.');
+            }
+
+            // 2. (추가 구현 필요) 입력된 메모와 사진 정보를 로컬 스토리지나 서버로 전송
+            console.log("--- 저장할 데이터 ---");
+            console.log("메모:", document.querySelector('.prompt-textarea').value);
+            console.log("사진 정보:", images);
+            
+            // 3. (추가 구현) 필터 데이터 수집
+            console.log("지역:", document.getElementById('region-select').value);
+            console.log("카테고리:", document.getElementById('category-select').value);
+            // ...
+        }
+
+        // Recommendation items click
+        document.querySelectorAll('.recommendation-item').forEach(item => {
+            item.addEventListener('click', function() {
+                // You can implement recommendation click behavior here
+                alert('추천 항목을 클릭했습니다!');
+            });
+        });
+        
+        // ★★★ [새 JavaScript] 필터 연동 기능 (시작) ★★★
+
+        // (이곳에 실제 신안군 데이터를 로드하는 로직이 필요합니다)
+        const sampleData = {
+            "비금면": {
+                "공원": ["비금공원", "서산공원"],
+                "가로수": ["비금1로", "비금2로"],
+                "나무": ["소나무", "동백나무"]
+            },
+            "도초면": {
+                "생활숲": ["도초생활숲"],
+                "가로수": ["도초해안로"],
+                "나무": ["느티나무", "팽나무"]
+            },
+            "지도읍": {
+                "공원": ["지도공원"],
+                "가로수": ["지도대로"],
+                "나무": ["은행나무", "벚나무"]
+            },
+            "압해읍": {
+                "생활숲": ["압해생활숲", "압해체육공원"],
+                "가로수": ["압해로"],
+                "나무": ["소나무", "후박나무"]
+            }
+        };
+
+        function populateSelect(selectId, options) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">전체</option>'; // '전체' 옵션으로 초기화
+            options.forEach(option => {
+                select.add(new Option(option, option));
+            });
+        }
+
+        function resetSelect(selectId) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">전체</option>';
+            select.disabled = true;
+        }
+
+      // --- 4. 필터 함수 ---
+        function onRegionChange() {
+            const region = document.getElementById('region-select').value;
+            const categorySelect = document.getElementById('category-select');
+            const placeSelect = document.getElementById('place-select');
+            const treeSelect = document.getElementById('tree-select');
+            categorySelect.value = '';
+            placeSelect.value = '';
+            treeSelect.value = '';
+            placeSelect.innerHTML = '<option value="">전체</option>';
+            treeSelect.innerHTML = '<option value="">전체</option>';
+            if (region) {
+                categorySelect.disabled = false;
+            } else {
+                categorySelect.disabled = true;
+                placeSelect.disabled = true;
+                treeSelect.disabled = true;
+            }
+        }
+
+        function onCategoryChange() {
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            const placeSelect = document.getElementById('place-select');
+            const treeSelect = document.getElementById('tree-select');
+            placeSelect.value = '';
+            treeSelect.value = '';
+            treeSelect.innerHTML = '<option value="">전체</option>';
+            if (category) {
+                placeSelect.disabled = false;
+                const places = [...new Set(allTreeData 
+                    .filter(t => t.region === region && t.category === category)
+                    .map(t => t.place))];
+                placeSelect.innerHTML = '<option value="">전체</option>' +
+                    places.map(p => `<option value="${p}">${p}</option>`).join('');
+            } else {
+                placeSelect.disabled = true;
+                placeSelect.innerHTML = '<option value="">전체</option>';
+                treeSelect.disabled = true;
+            }
+        }
+        
+        function onPlaceChange() {
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            const place = document.getElementById('place-select').value;
+            const treeSelect = document.getElementById('tree-select');
+            treeSelect.value = '';
+            if (place) {
+                treeSelect.disabled = false;
+                const trees = [...new Set(allTreeData
+                    .filter(t => t.region === region && t.category === category && t.place === place)
+                    .map(t => t.tree))];
+                treeSelect.innerHTML = '<option value="">전체</option>' +
+                    trees.map(tr => `<option value="${tr}">${tr}</option>`).join('');
+            } else {
+                treeSelect.disabled = false;
+                const trees = [...new Set(allTreeData
+                    .filter(t => t.region === region && t.category === category)
+                    .map(t => t.tree))];
+                treeSelect.innerHTML = '<option value="">전체</option>' +
+                    trees.map(tr => `<option value="${tr}">${tr}</option>`).join('');
+            }
+        }
+
+
+        function applyFilters() {
+            const region = document.getElementById('region-select').value;
+            const category = document.getElementById('category-select').value;
+            const place = document.getElementById('place-select').value;
+            const tree = document.getElementById('tree-select').value;
+            
+            alert(`검색 실행:\n- 지역: ${region}\n- 카테고리: ${category}\n- 장소: ${place}\n- 나무: ${tree}`);
+            
+            // (이곳에 실제 필터링/검색 로직을 구현합니다)
+        }
+        // ★★★ [새 JavaScript] 필터 연동 기능 (끝) ★★★
+
+    </script>
+</body>
+</html>

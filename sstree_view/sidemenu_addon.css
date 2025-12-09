@@ -1,0 +1,282 @@
+/* 기존 styles_horizontal.css 내용을 그대로 포함하고 사이드 메뉴 스타일 추가 */
+
+/* ====================================
+   🍔 햄버거 메뉴 & 상단 헤더
+   ==================================== */
+
+.top-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 15px 20px;
+    background-color: #000;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    /*border-bottom: 1px solid #333;*/
+}
+
+.hamburger-menu {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: all 0.3s;
+}
+
+.hamburger-menu span {
+    display: block;
+    width: 25px;
+    height: 2px;
+    background-color: #ffffff;
+    border-radius: 2px;
+    transition: all 0.3s;
+}
+
+.hamburger-menu:hover span {
+    background-color: #22c55e;
+}
+
+.app-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #4ade80;
+    margin: 0;
+    flex: 1;
+}
+
+/* ====================================
+   📱 사이드 메뉴 오버레이
+   ==================================== */
+
+.side-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+    z-index: 999;
+}
+
+.side-menu-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ====================================
+   📋 사이드 메뉴
+   ==================================== */
+
+.side-menu {
+    position: fixed;
+    top: 0;
+    left: -320px;
+    width: 320px;
+    height: 100%;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+    transition: left 0.3s ease-out;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.side-menu.active {
+    left: 0;
+}
+
+/* 사이드 메뉴 헤더 */
+.side-menu-header {
+    padding: 25px 20px;
+    background: linear-gradient(135deg, #2a2a4a, #1a1a2e);
+    border-bottom: 1px solid rgba(74, 222, 128, 0.2);
+    position: relative;
+}
+
+.side-menu-profile {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.profile-avatar {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.profile-info {
+    flex: 1;
+}
+
+.profile-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.profile-email {
+    font-size: 13px;
+    color: #999;
+}
+
+.side-menu-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s;
+}
+
+.side-menu-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
+}
+
+/* 사이드 메뉴 콘텐츠 */
+.side-menu-content {
+    flex: 1;
+    padding: 20px 0;
+    overflow-y: auto;
+}
+
+.menu-section {
+    margin-bottom: 25px;
+    padding: 0 20px;
+}
+
+.menu-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4ade80;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    padding-left: 5px;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 14px 15px;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.3s;
+    margin-bottom: 5px;
+}
+
+.menu-item:hover {
+    background-color: rgba(74, 222, 128, 0.1);
+    transform: translateX(5px);
+}
+
+.menu-item:active {
+    background-color: rgba(74, 222, 128, 0.2);
+}
+
+.menu-icon {
+    font-size: 20px;
+    width: 24px;
+    text-align: center;
+}
+
+.menu-text {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+/* 사이드 메뉴 푸터 */
+.side-menu-footer {
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.menu-logout-btn {
+    width: 100%;
+    background-color: rgba(255, 59, 48, 0.15);
+    color: #ff3b30;
+    border: 1px solid rgba(255, 59, 48, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 12px;
+}
+
+.menu-logout-btn:hover {
+    background-color: rgba(255, 59, 48, 0.25);
+}
+
+.menu-version {
+    text-align: center;
+    font-size: 11px;
+    color: #666;
+    margin-top: 8px;
+}
+
+/* ====================================
+   📱 모바일 최적화
+   ==================================== */
+
+@media (max-width: 768px) {
+    .side-menu {
+        width: 280px;
+        left: -280px;
+    }
+    
+    .top-header {
+        padding: 12px 15px;
+    }
+    
+    .app-title {
+        font-size: 24px;
+    }
+    
+    .menu-item {
+        padding: 16px 15px;
+    }
+    
+    .menu-icon {
+        font-size: 22px;
+    }
+    
+    .menu-text {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .side-menu {
+        width: 260px;
+        left: -260px;
+    }
+}

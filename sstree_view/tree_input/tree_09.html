@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>신안군 스마트 트리맵 현장 입력</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=257fdd3647dd6abdb05eae8681106514&libraries=services"></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+
+        <div class="main-header">
+            <div class="header-content">
+                <div class="title-section">
+                    <h1>🌳 신안군 스마트 트리맵</h1>
+                </div>
+                
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label class="filter-label" for="region-select">1. 지역</label>
+                        <select id="region-select" onchange="onRegionChange()">
+                            <option value="">전체</option>
+                            <option value="비금면">비금면</option>
+                            <option value="도초면">도초면</option>
+                            <option value="지도읍">지도읍</option>
+                            <option value="압해읍">압해읍</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">2. 카테고리</label>
+                        <select id="category-select" onchange="onCategoryChange()" disabled>
+                            <option value="">전체</option>
+                            <option value="공원">공원</option>
+                            <option value="생활숲">생활숲</option>
+                            <option value="가로수">가로수</option>
+                        </select>
+                    </div>   
+
+                    <div class="filter-group">
+                        <label class="filter-label" for="place-select">3. 장소</label>
+                        <select id="place-select" onchange="onPlaceChange()" disabled>
+                            <option value="">전체</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label" for="tree-select">4. 나무종류</label>
+                        <select id="tree-select" disabled>
+                            <option value="">전체</option>
+                        </select>
+                    </div>
+                    <button class="btn-search" onclick="applyFilters()">검색</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="fileInput" accept="image/jpeg,image/png" multiple>
+            <div id="uploadPlaceholder">
+                <div class="upload-icon">🏞️</div>
+                <div class="upload-text">
+                    현장 사진 (JPG, PNG)을 여기에 드래그하세요<br>
+                    파일 크기 10MB 이하, 크기 300px 이상<br>
+                    <strong>여러 장 선택 가능</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="image-counter" id="imageCounter">
+            <span class="counter-text">📸 <span id="imageCount">0</span>장의 현장 사진</span>
+            <button class="clear-all-btn" onclick="clearAllImages()">🗑️ 모두 삭제</button>
+        </div>
+
+        <div class="drag-hint" id="dragHint">
+            💡 사진을 드래그하여 순서를 조정할 수 있습니다 (가로수 경로 순서)
+        </div>
+
+        <div class="image-gallery" id="imageGallery">
+        </div>
+
+        <div class="selected-image-display" id="selectedImageDisplay">
+            <div class="selected-image-header">
+                <span class="selected-image-title">선택된 현장 사진</span>
+            </div>
+            <img id="selectedImagePreview" class="selected-image-preview">
+        </div>
+
+        <div class="recommendations">
+            <div class="recommendations-header">
+                <span class="recommendations-label">추천:</span>
+                <button class="refresh-btn">🔄</button>
+            </div>
+            <div class="recommendations-grid">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=1" class="recommendation-item" alt="추천 1">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=2" class="recommendation-item" alt="추천 2">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=3" class="recommendation-item" alt="추천 3">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=4" class="recommendation-item" alt="추천 4">
+                <img src="https://placehold.co/80x80/1a1a1a/4a5568?text=5" class="recommendation-item" alt="추천 5">
+            </div>
+        </div>
+        
+        <div class="prompt-section">
+            <div class="prompt-label">
+                상세 메모
+            </div>
+            <textarea class="prompt-textarea" placeholder="예: 3번 구역 느티나무, 수목 상태 양호, 병충해 없음. (선택한 사진의 EXIF 정보가 여기에 자동으로 표시됩니다.)"></textarea>
+        </div>
+        
+        <div class="location-section" id="locationSection">
+            <div class="location-header">
+                <span class="location-icon">📍</span>
+                <span>촬영 위치 정보 (GPS)</span>
+            </div>
+            <div class="location-info" id="locationInfo">
+                <div class="no-location">위치 정보가 없습니다.</div>
+            </div>
+            <div class="map-container" id="mapContainer" style="display: none;">
+                <div id="locationMap"></div>
+                <button class="map-close-btn" onclick="toggleMapFullscreen()">✕ 닫기</button>
+            </div>
+            <div class="location-actions" id="locationActions" style="display: none;">
+                <button class="location-btn" id="kakaoDirectionsBtn" onclick="openKakaoDirections()" disabled>🌳 가로수 전체보기</button>
+                <button class="location-btn" onclick="copyCoordinates()">📋 좌표 복사</button>
+                <button class="location-btn" onclick="toggleMapFullscreen()">🖥️ 지도 전체화면</button>
+            </div>
+        </div>
+
+        <div class="google-drive-section" id="googleDriveSection">
+            <div class="drive-header">
+                <div class="drive-title">
+                    <span class="drive-icon">📂</span>
+                    <span>Google Drive에 백업</span>
+                </div>
+                <button class="sign-in-btn" id="signInBtn" onclick="handleAuthClick()">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+                        <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+                        <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
+                        <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+                    </svg>
+                    Google 로그인
+                </button>
+                <div id="userInfo" class="user-info" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="userName">로그인됨</span>
+                        <button class="sign-out-btn" onclick="handleSignoutClick()">로그아웃</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="drive-actions" id="driveActions" style="display: none;">
+                <button class="drive-upload-btn" onclick="uploadToGoogleDrive('selected')">
+                    <span>📤</span>
+                    <span>선택된 사진만 업로드</span>
+                </button>
+                <button class="drive-upload-btn" onclick="uploadToGoogleDrive('all')">
+                    <span>📦</span>
+                    <span>모든 사진 업로드</span>
+                </button>
+            </div>
+
+            <div class="upload-progress" id="uploadProgress"></div>
+        </div>
+
+        <button class="generate-btn" onclick="generateVideo()">
+            <span class="credit-icon">💾</span>
+            <span>정보 저장하기</span>
+        </button>
+    </div>
+
+    <!-- Custom Script -->
+    <script src="script.js"></script>
+</body>
+</html>

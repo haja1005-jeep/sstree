@@ -1,0 +1,171 @@
+[
+    {
+        "id": 1,
+        "region": "비금면",
+        "category": "가로수",
+        "place": "비금면 가로수길",
+        "tree": "메타세쿼이아",
+        "count": 3,
+        "lat": 34.9234,
+        "lng": 125.9567,
+        "year": 2012,
+        "area": "4.5km",
+        "manager": "신안군청 건설과",
+        "description": "메타세쿼이아가 터널처럼 이어진 아름다운 가로수길입니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=400",
+            "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=400",
+            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400"
+        ],
+        "trees": [
+            { "treeId": 101, "treeName": "메타세쿼이아 1번", "height": "15m", "diameter": "45cm", "age": 13, "health": "양호", "lat": 34.8234, "lng": 125.9567 },
+            { "treeId": 102, "treeName": "메타세쿼이아 2번", "height": "14m", "diameter": "42cm", "age": 13, "health": "양호", "lat": 34.8244, "lng": 125.9577 },
+            { "treeId": 103, "treeName": "메타세쿼이아 3번", "height": "16m", "diameter": "48cm", "age": 13, "health": "우수", "lat": 34.8254, "lng": 125.9587 }
+        ]
+    },
+    {
+        "id": 2,
+        "region": "비금면",
+        "category": "공원",
+        "place": "중앙공원",
+        "tree": "소나무",
+        "count": 2,
+        "lat": 34.8300,
+        "lng": 125.9650,
+        "year": 2015,
+        "area": "2,500㎡",
+        "manager": "신안군청 산림과",
+        "description": "비금면의 대표적인 공원으로 주민들의 휴식 공간입니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400",
+            "https://images.unsplash.com/photo-1511497584788-876760111969?w=400",
+            "https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?w=400"
+        ],
+        "trees": [
+            { "treeId": 201, "treeName": "소나무 1번", "height": "12m", "diameter": "55cm", "age": 10, "health": "양호", "lat": 34.8300, "lng": 125.9650 },
+            { "treeId": 202, "treeName": "소나무 2번", "height": "11m", "diameter": "50cm", "age": 10, "health": "양호", "lat": 34.8310, "lng": 125.9660 }
+        ]
+    },
+    {
+        "id": 3,
+        "region": "도초면",
+        "category": "가로수",
+        "place": "만년리 가로수길",
+        "tree": "벚나무",
+        "count": 4,
+        "lat": 34.709410,
+        "lng": 125.972199,
+        "year": 2013,
+        "area": "850m",
+        "manager": "신안군청 산림과",
+        "description": "도초면 만년리를 관통하는 벚나무 가로수길입니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1522383225653-ed111181a951?w=400",
+            "https://images.unsplash.com/photo-1490730141103-6cac27aaab94?w=400",
+            "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400"
+        ],
+        "trees": [
+            { "treeId": 301, "treeName": "벚나무 1번", "height": "8m", "diameter": "30cm", "age": 12, "health": "양호", "lat": 34.709410, "lng": 125.972199 },
+            { "treeId": 302, "treeName": "벚나무 2번", "height": "9m", "diameter": "32cm", "age": 12, "health": "우수", "lat": 34.708500, "lng": 125.972500 },
+            { "treeId": 303, "treeName": "벚나무 3번", "height": "8.5m", "diameter": "31cm", "age": 12, "health": "양호", "lat": 34.707500, "lng": 125.972900 },
+            { "treeId": 304, "treeName": "벚나무 4번", "height": "9.5m", "diameter": "35cm", "age": 12, "health": "우수", "lat": 34.706300, "lng": 125.973400 }
+        ]
+    },
+    {
+        "id": 4,
+        "region": "지도읍",
+        "category": "생활숲",
+        "place": "지도 생태숲",
+        "tree": "느티나무",
+        "count": 3,
+        "lat": 34.8156,
+        "lng": 126.0877,
+        "year": 2018,
+        "area": "5,000㎡",
+        "manager": "신안군청 환경과",
+        "description": "지도읍의 생태 숲으로 다양한 수종이 자라고 있습니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1448375240586-882707db888b?w=400",
+            "https://images.unsplash.com/photo-1542401886-65d6c61db217?w=400",
+            "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400"
+        ],
+        "trees": [
+            { "treeId": 401, "treeName": "느티나무 1번", "height": "18m", "diameter": "70cm", "age": 7, "health": "우수", "lat": 34.8156, "lng": 126.0877 },
+            { "treeId": 402, "treeName": "느티나무 2번", "height": "17m", "diameter": "68cm", "age": 7, "health": "양호", "lat": 34.8166, "lng": 126.0887 },
+            { "treeId": 403, "treeName": "느티나무 3번", "height": "19m", "diameter": "75cm", "age": 7, "health": "우수", "lat": 34.8176, "lng": 126.0897 }
+        ]
+    },
+    {
+        "id": 5,
+        "region": "지도읍",
+        "category": "생활숲",
+        "place": "지도 생태숲",
+        "tree": "소나무",
+        "count": 4,
+        "lat": 34.8156,
+        "lng": 126.0877,
+        "year": 2018,
+        "area": "5,000㎡",
+        "manager": "신안군청 환경과",
+        "description": "지도읍의 생태 숲으로 다양한 수종이 자라고 있습니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1448375240586-882707db888b?w=400",
+            "https://images.unsplash.com/photo-1542401886-65d6c61db217?w=400",
+            "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400"
+        ],
+        "trees": [
+            { "treeId": 404, "treeName": "소나무 1번", "treeType": "소나무", "height": "13m", "diameter": "52cm", "age": 7, "health": "양호", "lat": 34.8160, "lng": 126.0882 },
+            { "treeId": 405, "treeName": "소나무 2번", "treeType": "소나무", "height": "12.5m", "diameter": "50cm", "age": 7, "health": "양호", "lat": 34.8170, "lng": 126.0892 },
+            { "treeId": 406, "treeName": "단풍나무 1번", "treeType": "단풍나무", "height": "10m", "diameter": "40cm", "age": 7, "health": "우수", "lat": 34.8163, "lng": 126.0885 }
+        ]
+    },
+    {
+        "id": 6,
+        "region": "비금면",
+        "category": "가로수",
+        "place": "가산선착장-읍동마을",
+        "tree": "먼나무",
+        "count": 57,
+        "lat": 34.8300,
+        "lng": 125.9000,
+        "year": 2012,
+        "area": "8km",
+        "manager": "신안군청 건설과",
+        "description": "메타세쿼이아가 터널처럼 이어진 아름다운 가로수길입니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=400",
+            "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=400",
+            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400"
+        ],
+        "trees": [
+            { "treeId": 601, "treeName": "먼나무 1번", "height": "15m", "diameter": "45cm", "age": 13, "health": "양호", "lat": 34.8234, "lng": 125.9587 },
+            { "treeId": 602, "treeName": "먼나무 2번", "height": "14m", "diameter": "42cm", "age": 13, "health": "양호", "lat": 34.8244, "lng": 125.9597 },
+            { "treeId": 603, "treeName": "먼나무 3번", "height": "16m", "diameter": "48cm", "age": 13, "health": "우수", "lat": 34.8254, "lng": 125.9687 }
+        ]
+    },
+
+    {
+        "id": 7,
+        "region": "비금면",
+        "category": "가로수",
+        "place": "가산선착장-읍동마을",
+        "tree": "이팝나무",
+        "count": 337,
+        "lat": 34.8300,
+        "lng": 125.9000,
+        "year": 2012,
+        "area": "8km",
+        "manager": "신안군청 건설과",
+        "description": "메타세쿼이아가 터널처럼 이어진 아름다운 가로수길입니다.",
+        "images": [
+            "https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=400",
+            "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=400",
+            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400"
+        ],
+        "trees": [
+            { "treeId": 701, "treeName": "이팝나무 1번", "height": "15m", "diameter": "45cm", "age": 13, "health": "양호", "lat": 34.8234, "lng": 125.9567 },
+            { "treeId": 702, "treeName": "이팝나무 2번", "height": "14m", "diameter": "42cm", "age": 13, "health": "양호", "lat": 34.8244, "lng": 125.9577 },
+            { "treeId": 703, "treeName": "이팝나무 3번", "height": "16m", "diameter": "48cm", "age": 13, "health": "우수", "lat": 34.8254, "lng": 125.9687 }
+        ]
+    }
+]
