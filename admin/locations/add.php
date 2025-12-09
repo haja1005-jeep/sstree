@@ -517,6 +517,7 @@ function placesSearchCB(data, status, pagination) {
     }
 }
 
+// [기존 코드 수정] displayPlaces 함수 내부
 function displayPlaces(places) {
     var listEl = document.getElementById('placesList');
     listEl.innerHTML = '';
@@ -532,20 +533,20 @@ function displayPlaces(places) {
         (function(place) {
             itemEl.onclick = function() {
                 var coords = new kakao.maps.LatLng(place.y, place.x);
-                // 지도 이동 및 정보 업데이트
-                map.setCenter(coords);
-                map.setLevel(3);
                 
-                // 마커, 좌표, 주소, 장소명 자동 입력
+                // 1. 지도 이동 및 기본 마커 표시
+                map.setCenter(coords);
+                map.setLevel(3); // 지적도가 잘 보이도록 줌 레벨 조정
+                
                 updateLocationInfo(coords);
                 fillAddressFields(place.address_name, place.road_address_name);
-                document.getElementById('location_name').value = place.place_name; // 장소명 자동 입력
+                document.getElementById('location_name').value = place.place_name;
                 
-                // 검색 목록 숨김
+                // 2. 검색 목록 숨김
                 listEl.style.display = 'none';
                 
-                // 지적도 모드면 데이터 로드
-                if(useVWorld) debouncedGetData();
+                // [⭐️추가됨] 3. 해당 좌표의 지적도(경계)를 찾아 붉은색으로 그리기
+                searchPolygonByCoord(place.x, place.y); 
             };
         })(places[i]);
 
@@ -727,26 +728,61 @@ function removeVWorldPolygons() {
 // 4. 지도 클릭 및 좌표 처리
 // ==========================================
 
+// [수정] 지도 클릭 이벤트
+// [수정] 지도 클릭 이벤트
+// [수정] 지도 클릭 이벤트 (건물명/장소명 우선 적용)
 kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
     if (useVWorld) return; 
-    updateLocationInfo(mouseEvent.latLng);
     
-    geocoder.coord2Address(mouseEvent.latLng.getLng(), mouseEvent.latLng.getLat(), function(result, status) {
+    var latlng = mouseEvent.latLng;
+    
+    // 1. 마커 및 좌표 업데이트
+    updateLocationInfo(latlng);
+    
+    // 2. 좌표로 주소 및 건물명 검색
+    geocoder.coord2Address(latlng.getLng(), latlng.getLat(), function(result, status) {
         if (status === kakao.maps.services.Status.OK) {
-            var addr = result[0].address.address_name;
-            var roadAddr = result[0].road_address ? result[0].road_address.address_name : '';
-            fillAddressFields(addr, roadAddr);
+            var roadObj = result[0].road_address; // 도로명 주소 객체
+            var jibunObj = result[0].address;     // 지번 주소 객체
+
+            var fullAddress = roadObj ? roadObj.address_name : jibunObj.address_name;
+            var buildingName = roadObj ? roadObj.building_name : ''; // 건물명 추출
+
+            // 주소 필드 채우기
+            fillAddressFields(jibunObj.address_name, fullAddress);
+
+            // [⭐️핵심 수정] 장소명 자동 입력 로직
+            // 1순위: 건물명 (예: 도초면사무소, OO아파트)
+            // 2순위: 주소 (건물명이 없을 경우)
+            if (buildingName && buildingName.trim() !== "") {
+                document.getElementById('location_name').value = buildingName;
+            } else {
+                document.getElementById('location_name').value = fullAddress;
+            }
         }
     });
+
+    // 3. 지적도(폴리곤) 그리기
+    if (typeof searchPolygonByCoord === 'function') {
+        searchPolygonByCoord(latlng.getLng(), latlng.getLat());
+    }
 });
 
+// [수정] 마커 생성 및 정보 업데이트 함수
 function updateLocationInfo(latlng) {
     const lat = latlng.getLat();
     const lng = latlng.getLng();
 
+    // 기존 마커 제거 및 새 마커 생성
     if (currentMarker) currentMarker.setMap(null);
     currentMarker = new kakao.maps.Marker({ position: latlng, map: map });
 
+    // [⭐️추가됨] 마커를 클릭했을 때도 지적도 영역 다시 표시하기
+    kakao.maps.event.addListener(currentMarker, 'click', function() {
+        searchPolygonByCoord(lng, lat);
+    });
+
+    // 좌표 정보 입력
     document.getElementById('latitude').value = lat.toFixed(8);
     document.getElementById('longitude').value = lng.toFixed(8);
     document.getElementById('gps-info').style.display = 'flex';
@@ -811,6 +847,108 @@ function previewVRImage(input) {
         };
         reader.readAsDataURL(input.files[0]);
     }
+}
+
+// [⭐️신규 추가] 좌표로 지적도 경계 찾기 및 그리기
+function searchPolygonByCoord(lng, lat) {
+    // 로딩 표시
+    $('#mapLoading').show();
+
+    // 좌표 주변에 작은 영역(BBOX)을 설정하여 데이터 요청 (검색 속도 최적화)
+    var margin = 0.001; // 약 100m 반경
+    var bbox = `${parseFloat(lng) - margin},${parseFloat(lat) - margin},${parseFloat(lng) + margin},${parseFloat(lat) + margin}`;
+
+    const params = {
+        service: 'WFS', version: '2.0.0', request: 'GetFeature',
+        typeName: 'lp_pa_cbnd_bubun', // 연속지적도
+        srsName: 'EPSG:4326', // 경위도 좌표계
+        bbox: bbox, 
+        output: 'text/javascript', 
+        format_options: 'callback:parseSelectedPolygon', // 콜백 함수 지정
+        key: VWORLD_KEY
+    };
+
+    const url = "https://api.vworld.kr/req/wfs?" + $.param(params);
+    
+    // 기존 스크립트 제거 후 새로 요청
+    $('#vworld-search-script').remove();
+    const script = document.createElement('script');
+    script.src = url;
+    script.id = 'vworld-search-script';
+    script.onerror = function() { $('#mapLoading').hide(); };
+    document.head.appendChild(script);
+}
+
+// [⭐️신규 추가] V-World 응답 처리 (선택된 폴리곤 그리기)
+window.parseSelectedPolygon = function(data) {
+    $('#mapLoading').hide();
+    
+    // 기존 선택된 폴리곤이 있다면 제거
+    if (selectedPolygon) selectedPolygon.setMap(null);
+
+    let features = data.features || (data.response ? data.response.result.featureCollection.features : []);
+    if (!features || features.length === 0) return;
+
+    // 현재 선택된 마커의 좌표
+    var centerLat = parseFloat(document.getElementById('latitude').value);
+    var centerLng = parseFloat(document.getElementById('longitude').value);
+
+    var targetFeature = null;
+
+    // 가져온 여러 필지 중, 내 좌표(마커)가 실제로 포함된 필지 찾기
+    for (var i = 0; i < features.length; i++) {
+        var feature = features[i];
+        var geometry = feature.geometry;
+        var coords = (geometry.type === 'Polygon') ? geometry.coordinates[0] : geometry.coordinates[0][0];
+        
+        // 다각형 내부에 점이 있는지 확인 (알고리즘)
+        if (containsLocation(centerLng, centerLat, coords)) {
+            targetFeature = feature;
+            break;
+        }
+    }
+
+    // 만약 정확히 포함된 걸 못 찾았다면, 첫 번째 것을 사용 (예외 처리)
+    if (!targetFeature && features.length > 0) targetFeature = features[0];
+
+    if (targetFeature) {
+        var geometry = targetFeature.geometry;
+        var rawPath = (geometry.type === 'Polygon') ? geometry.coordinates[0] : geometry.coordinates[0][0];
+        var path = rawPath.map(pt => new kakao.maps.LatLng(pt[1], pt[0]));
+
+        // 붉은색 테두리와 면으로 그리기 (사진과 동일한 스타일)
+        selectedPolygon = new kakao.maps.Polygon({
+            map: map,
+            path: path,
+            strokeWeight: 3,
+            strokeColor: '#ff0000', // 빨간 테두리
+            strokeOpacity: 1,
+            fillColor: '#ff0000',   // 빨간 채우기
+            fillOpacity: 0.3        // 반투명
+        });
+
+        // DB 저장을 위해 WKT 데이터 업데이트
+        savePolygonWKT(rawPath);
+        
+        // 지번 주소가 있다면 업데이트 (선택 사항)
+        var props = targetFeature.properties;
+        var jibun = props.jibun || props.addr;
+        console.log("선택된 지적도:", jibun);
+    }
+};
+
+// [⭐️신규 추가] 점이 다각형 안에 있는지 판별하는 함수 (Ray-Casting Algorithm)
+function containsLocation(x, y, polygon) {
+    var inside = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        var xi = polygon[i][0], yi = polygon[i][1];
+        var xj = polygon[j][0], yj = polygon[j][1];
+
+        var intersect = ((yi > y) != (yj > y)) &&
+            (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
 }
 </script>
 
