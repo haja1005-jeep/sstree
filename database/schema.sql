@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 호스트: localhost
--- 생성 시간: 25-11-16 06:00
+-- 생성 시간: 25-12-09 07:41
 -- 서버 버전: 10.2.44-MariaDB-log
 -- PHP 버전: 8.3.17
 
@@ -341,7 +341,58 @@ INSERT INTO `activity_logs` (`log_id`, `user_id`, `action`, `target_type`, `targ
 (296, 1, 'create', 'location', 30, '장소 추가: 도초 낙우송길', '58.125.186.98', '2025-11-15 12:41:35'),
 (297, 1, 'create', 'location', 31, '장소 추가: 도초 현충탑', '58.125.186.98', '2025-11-15 12:48:26'),
 (298, 1, 'login', 'user', 1, '로그인 성공', '211.235.80.88', '2025-11-16 03:31:58'),
-(299, 1, 'login', 'user', 1, '로그인 성공', '58.125.186.98', '2025-11-16 04:29:22');
+(299, 1, 'login', 'user', 1, '로그인 성공', '58.125.186.98', '2025-11-16 04:29:22'),
+(300, 1, 'login', 'user', 1, '로그인 성공', '58.125.186.98', '2025-11-16 11:57:21'),
+(301, 1, 'login', 'user', 1, '로그인 성공', '211.235.81.53', '2025-11-16 23:31:10'),
+(302, 1, 'login', 'user', 1, '로그인 성공', '58.125.186.98', '2025-11-17 00:03:00'),
+(303, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-11-17 07:40:43'),
+(304, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-11-17 10:55:57'),
+(305, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-11-18 10:44:55'),
+(306, 1, 'login', 'user', 1, '로그인 성공', '58.125.186.98', '2025-11-20 02:07:13'),
+(307, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-11-20 04:04:55'),
+(308, 1, 'delete', 'location_photo', 70, '장소 사진 삭제 (장소 ID: 32)', '221.144.12.39', '2025-11-20 05:14:06'),
+(309, 1, 'delete', 'location_photo', 69, '장소 사진 삭제 (장소 ID: 32)', '221.144.12.39', '2025-11-20 05:14:12'),
+(310, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-12-01 12:06:08'),
+(311, 1, 'login', 'user', 1, '로그인 성공', '58.125.186.98', '2025-12-01 14:27:08'),
+(312, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-12-02 08:27:35'),
+(313, 1, 'login', 'user', 1, '로그인 성공', '221.144.12.39', '2025-12-09 07:31:23');
+
+-- --------------------------------------------------------
+
+--
+-- 테이블 구조 `admin`
+--
+
+CREATE TABLE `admin` (
+  `id` int(11) NOT NULL,
+  `adminid` varchar(20) NOT NULL COMMENT '회원아이디',
+  `adminpw` varchar(255) NOT NULL COMMENT '패스워드',
+  `name` varchar(30) NOT NULL COMMENT '성명',
+  `jumin` varchar(14) NOT NULL COMMENT '주민등록번호',
+  `tel` varchar(13) NOT NULL COMMENT '전화번호',
+  `hp` varchar(13) NOT NULL COMMENT '핸드폰',
+  `sosok` varchar(50) NOT NULL COMMENT '회사명',
+  `depart` varchar(100) NOT NULL,
+  `jikwi` varchar(50) NOT NULL,
+  `fax` varchar(13) NOT NULL COMMENT '팩스',
+  `email` varchar(100) NOT NULL COMMENT '메일주소',
+  `zip1` int(3) NOT NULL COMMENT '우편번호1',
+  `zip2` int(3) NOT NULL COMMENT '우편번호2',
+  `addr1` varchar(255) NOT NULL COMMENT '주소1',
+  `addr2` varchar(255) NOT NULL COMMENT '주소2',
+  `bankname` varchar(50) NOT NULL COMMENT '은행명',
+  `banknum` varchar(50) NOT NULL COMMENT '계좌번호',
+  `level` int(1) NOT NULL COMMENT '관리레벨',
+  `regdate` datetime NOT NULL COMMENT '등록일시',
+  `ip` varchar(20) NOT NULL COMMENT '접속ip주소'
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+--
+-- 테이블의 덤프 데이터 `admin`
+--
+
+INSERT INTO `admin` (`id`, `adminid`, `adminpw`, `name`, `jumin`, `tel`, `hp`, `sosok`, `depart`, `jikwi`, `fax`, `email`, `zip1`, `zip2`, `addr1`, `addr2`, `bankname`, `banknum`, `level`, `regdate`, `ip`) VALUES
+(1, 'admin', '*A4B6157319038724E3560894F7F932C8886EBFCF', '신안군 스마트 트리맵', '', '', '', '', '', '', '', '', 0, 0, '', '', '', '', 10, '0000-00-00 00:00:00', '');
 
 -- --------------------------------------------------------
 
@@ -380,6 +431,7 @@ CREATE TABLE `locations` (
   `location_name` varchar(200) NOT NULL,
   `address` text DEFAULT NULL,
   `road_name` varchar(200) DEFAULT NULL COMMENT '도로명/노선명 (가로수)',
+  `road_type` varchar(50) DEFAULT NULL COMMENT '도로종류 (국도, 지방도, 군도, 농도 등)',
   `section_start` varchar(200) DEFAULT NULL COMMENT '시점 (가로수)',
   `section_end` varchar(200) DEFAULT NULL COMMENT '종점 (가로수)',
   `location_type` enum('urban_forest','street_tree','living_forest','school','park','other') DEFAULT 'other' COMMENT '장소 유형',
@@ -402,17 +454,22 @@ CREATE TABLE `locations` (
 -- 테이블의 덤프 데이터 `locations`
 --
 
-INSERT INTO `locations` (`location_id`, `region_id`, `category_id`, `location_name`, `address`, `road_name`, `section_start`, `section_end`, `location_type`, `latitude`, `longitude`, `area`, `length`, `width`, `establishment_year`, `management_agency`, `manager_name`, `manager_contact`, `video_url`, `description`, `created_at`, `updated_at`) VALUES
-(23, 18, 7, '용호마을-구기마을', '전라남도 신안군 비금면 비금북부길 463-2', NULL, NULL, NULL, 'street_tree', 34.77067011, 125.93515673, NULL, 300.00, 10.00, 1980, '비금면사무소', NULL, NULL, '', '', '2025-11-12 09:20:19', '2025-11-16 05:29:45'),
-(24, 18, 5, '비금 별들의 정원', '전남 신안군 비금면 가산리 380', NULL, NULL, NULL, 'park', 34.77094035, 125.97718623, NULL, NULL, NULL, 2024, '비금면사무소', NULL, NULL, '', '', '2025-11-12 09:23:02', '2025-11-16 05:30:50'),
-(20, 19, 5, '도초 환상의 정원', '전남 신안군 도초면 발매리 1384', NULL, NULL, NULL, 'park', 34.71069652, 125.93348097, 3344.00, 1.00, 1.00, 2023, '도초면사무소', NULL, NULL, '', '팽나무 10리길', '2025-11-10 07:59:18', '2025-11-16 05:30:50'),
-(21, 19, 5, '도초 쌈지정원', '전남 신안군 도초면 발매리 1386-12', NULL, NULL, NULL, 'park', 34.70633788, 125.93085187, NULL, NULL, NULL, 2023, '신안군 정원 산림과', NULL, NULL, '', '', '2025-11-10 08:03:21', '2025-11-16 05:30:50'),
-(29, 19, 5, '도초 수국공원', '전남 신안군 도초면 지남리 산 3', NULL, NULL, NULL, 'park', 34.69341789, 125.92842074, NULL, NULL, NULL, 2019, '', NULL, NULL, '', '수국 천만송이', '2025-11-15 12:40:04', '2025-11-16 05:30:50'),
-(27, 18, 5, '비금 전남매일의 숲', '전남 신안군 비금면 지당리 산 70-1', NULL, NULL, NULL, 'park', 34.77453055, 125.94581245, NULL, NULL, NULL, NULL, '', NULL, NULL, '', '', '2025-11-15 12:33:07', '2025-11-16 05:30:50'),
-(26, 18, 5, '비금 붉은해변 정원', '전남 신안군 비금면 용소리 718', NULL, NULL, NULL, 'park', 34.78750470, 125.97793228, NULL, NULL, NULL, 2024, '비금면사무소', NULL, NULL, '', '', '2025-11-15 12:31:14', '2025-11-16 05:30:50'),
-(28, 18, 5, '비금 고막 팽나무정원', '전남 신안군 비금면 고서리 산 218-1', NULL, NULL, NULL, 'park', 34.76742098, 125.89622587, NULL, NULL, NULL, 2024, '비금면사무소', NULL, NULL, '', '', '2025-11-15 12:35:05', '2025-11-16 05:30:50'),
-(30, 19, 5, '도초 낙우송길', '전남 신안군 도초면 수다리 243-1', NULL, NULL, NULL, 'park', 34.70705683, 125.95764963, NULL, NULL, NULL, 2024, '', NULL, NULL, '', '', '2025-11-15 12:41:28', '2025-11-16 05:30:50'),
-(31, 19, 6, '도초 현충탑', '전남 신안군 도초면 수항리 1373', NULL, NULL, NULL, 'urban_forest', 34.70074055, 125.95581889, 2000.00, NULL, NULL, 1980, '도초면사무소', NULL, NULL, '', '', '2025-11-15 12:48:26', '2025-11-16 05:29:45');
+INSERT INTO `locations` (`location_id`, `region_id`, `category_id`, `location_name`, `address`, `road_name`, `road_type`, `section_start`, `section_end`, `location_type`, `latitude`, `longitude`, `area`, `length`, `width`, `establishment_year`, `management_agency`, `manager_name`, `manager_contact`, `video_url`, `description`, `created_at`, `updated_at`) VALUES
+(23, 18, 7, '용호마을-구기마을', '전라남도 신안군 비금면 비금북부길 463-2', NULL, NULL, NULL, NULL, 'street_tree', 34.77067011, 125.93515673, NULL, 300.00, 10.00, 1980, '비금면사무소', NULL, NULL, '', '', '2025-11-12 09:20:19', '2025-11-16 05:29:45'),
+(24, 18, 5, '비금 별들의 정원', '전남 신안군 비금면 가산리 380', NULL, NULL, NULL, NULL, 'park', 34.77094035, 125.97718623, NULL, NULL, NULL, 2024, '비금면사무소', NULL, NULL, '', '', '2025-11-12 09:23:02', '2025-11-16 05:30:50'),
+(20, 19, 5, '도초 환상의 정원', '전남 신안군 도초면 발매리 1384', NULL, NULL, NULL, NULL, 'park', 34.71069652, 125.93348097, 3344.00, 1.00, 1.00, 2023, '도초면사무소', NULL, NULL, '', '팽나무 10리길', '2025-11-10 07:59:18', '2025-11-16 05:30:50'),
+(21, 19, 5, '도초 쌈지정원', '전남 신안군 도초면 발매리 1386-12', NULL, NULL, NULL, NULL, 'park', 34.70633788, 125.93085187, NULL, NULL, NULL, 2023, '신안군 정원 산림과', NULL, NULL, '', '', '2025-11-10 08:03:21', '2025-11-16 05:30:50'),
+(29, 19, 5, '도초 수국공원', '전남 신안군 도초면 지남리 산 3', NULL, NULL, NULL, NULL, 'park', 34.69341789, 125.92842074, NULL, NULL, NULL, 2019, '', NULL, NULL, '', '수국 천만송이', '2025-11-15 12:40:04', '2025-11-16 05:30:50'),
+(27, 18, 5, '비금 전남매일의 숲', '전남 신안군 비금면 지당리 산 70-1', NULL, NULL, NULL, NULL, 'park', 34.77453055, 125.94581245, NULL, NULL, NULL, NULL, '', NULL, NULL, '', '', '2025-11-15 12:33:07', '2025-11-16 05:30:50'),
+(26, 18, 5, '비금 붉은해변 정원', '전남 신안군 비금면 용소리 718', NULL, NULL, NULL, NULL, 'park', 34.78750470, 125.97793228, NULL, NULL, NULL, 2024, '비금면사무소', NULL, NULL, '', '', '2025-11-15 12:31:14', '2025-11-16 05:30:50'),
+(28, 18, 5, '비금 고막 팽나무정원', '전남 신안군 비금면 고서리 산 218-1', NULL, NULL, NULL, NULL, 'park', 34.76742098, 125.89622587, NULL, NULL, NULL, 2024, '비금면사무소', NULL, NULL, '', '', '2025-11-15 12:35:05', '2025-11-16 05:30:50'),
+(30, 19, 5, '도초 낙우송길', '전남 신안군 도초면 수다리 243-1', NULL, NULL, NULL, NULL, 'park', 34.70705683, 125.95764963, NULL, NULL, NULL, 2024, '', NULL, NULL, '', '', '2025-11-15 12:41:28', '2025-11-16 05:30:50'),
+(31, 19, 6, '도초 현충탑', '전남 신안군 도초면 수항리 1373', NULL, NULL, NULL, NULL, 'urban_forest', 34.70074055, 125.95581889, 2000.00, NULL, NULL, 1980, '도초면사무소', NULL, NULL, '', '', '2025-11-15 12:48:26', '2025-11-16 05:29:45'),
+(32, 19, 6, '도초면', '도초면 수항리 1425-2', '', NULL, '', '', 'urban_forest', 34.73383025, 125.93606628, 2440.00, NULL, NULL, NULL, NULL, '김용은', '01032281005', 'https://youtu.be/qKlETOxgwWs?si=fS0_m6FRpI_yfuYK', '특히 사항 없음', '2025-11-20 04:22:22', '2025-11-20 05:36:38'),
+(33, 19, 5, '나박포 노인회관', '도초면 수항리 1480-48', '', NULL, '', '', 'urban_forest', NULL, NULL, 1000.00, NULL, NULL, NULL, NULL, '', '', '', '', '2025-11-20 05:38:46', '2025-11-20 05:38:46'),
+(34, 19, 7, '고란길', '', '고란길', NULL, '고란마을 입구(고란리 1633)', '도초초등학교(수항리 160-2)', 'street_tree', NULL, NULL, NULL, 1500.00, NULL, NULL, NULL, '', '', '', '', '2025-11-20 05:41:26', '2025-11-20 05:41:26'),
+(35, 19, 7, '발매길', '전남 신안군 도초면 발매리 1517', '발매길', '농도(307)', '팽나무 숲길(발매리 1405-10)', '발매마을(발매리 402)', 'street_tree', 34.70696416, 125.93134590, NULL, 250.00, 6.00, 1999, '도초 면사무소', '홍길도', '01032281005', '', 'ㅇㅇㅇ', '2025-11-20 06:06:57', '2025-11-20 06:33:07'),
+(36, 19, 7, '이곡길', '전남 신안군 도초면 외남리 1243', '이곡길', '농도(307)', '이곡상리(이곡리 713-3)', '이곡하리(이곡리 1687-14)', 'street_tree', 34.69244781, 125.95370771, NULL, 500.00, 8.00, NULL, NULL, '김용은', '01032281005', '', '지방 농도', '2025-11-20 06:22:42', '2025-11-20 06:22:42');
 
 -- --------------------------------------------------------
 
@@ -438,6 +495,17 @@ CREATE TABLE `location_photos` (
 --
 
 INSERT INTO `location_photos` (`photo_id`, `location_id`, `file_path`, `file_name`, `file_size`, `photo_type`, `sort_order`, `description`, `uploaded_by`, `uploaded_at`) VALUES
+(80, 34, 'uploads/photos/location_vr_34_691eaa1372eb5.jpg', 'life09_360vr_01.jpg', 487286, 'vr360', 0, NULL, 1, '2025-11-20 05:41:39'),
+(79, 34, 'uploads/photos/location_34_691eaa0f1413a.jpg', 'IMG_3111.jpg', 1273003, 'image', 3, NULL, 1, '2025-11-20 05:41:39'),
+(78, 34, 'uploads/photos/location_34_691eaa0a90bcc.jpg', 'IMG_3110.jpg', 2383706, 'image', 2, NULL, 1, '2025-11-20 05:41:35'),
+(77, 34, 'uploads/photos/location_34_691eaa062b3d2.jpg', 'IMG_3108.jpg', 1581895, 'image', 1, NULL, 1, '2025-11-20 05:41:30'),
+(76, 33, 'uploads/photos/location_vr_33_691ea96c680d2.jpg', 'life03_360vr_01.jpg', 495886, 'vr360', 0, NULL, 1, '2025-11-20 05:38:52'),
+(75, 33, 'uploads/photos/location_33_691ea96ab30c8.jpg', 'IMG_3092.jpg', 653159, 'image', 3, NULL, 1, '2025-11-20 05:38:52'),
+(72, 32, 'uploads/photos/location_vr_32_691e99d872f7e.jpg', 'life05_360vr_03.jpg', 602114, 'vr360', 0, NULL, 1, '2025-11-20 04:32:24'),
+(74, 33, 'uploads/photos/location_33_691ea967ec290.jpg', 'IMG_3091.jpg', 890590, 'image', 2, NULL, 1, '2025-11-20 05:38:50'),
+(71, 32, 'uploads/photos/location_32_691e99d6c9a4b.jpg', 'IMG_3079.jpg', 302784, 'image', 3, NULL, 1, '2025-11-20 04:32:24'),
+(73, 33, 'uploads/photos/location_33_691ea9664df39.jpg', 'IMG_3087.jpg', 241793, 'image', 1, NULL, 1, '2025-11-20 05:38:47'),
+(68, 32, 'uploads/photos/location_32_691e977ee76fc.jpg', 'IMG_3074.jpg', 347754, 'image', 1, NULL, 1, '2025-11-20 04:22:25'),
 (67, 30, 'uploads/photos/location_30_691874fbc8663.jpg', 'IMG_3252.jpg', 1494902, 'image', 2, NULL, 1, '2025-11-15 12:41:35'),
 (66, 30, 'uploads/photos/location_30_691874f8f0be0.jpg', 'IMG_3251.jpg', 668889, 'image', 1, NULL, 1, '2025-11-15 12:41:31'),
 (65, 29, 'uploads/photos/location_29_691874a722082.jpg', 'IMG_3331.jpg', 489710, 'image', 2, NULL, 1, '2025-11-15 12:40:09'),
@@ -460,7 +528,14 @@ INSERT INTO `location_photos` (`photo_id`, `location_id`, `file_path`, `file_nam
 (45, 23, 'uploads/photos/location_23_691451585c5d8.jpg', 'IMG_3071.jpg', 445250, 'image', 3, NULL, 1, '2025-11-12 09:20:27'),
 (46, 23, 'uploads/photos/location_23_6914515b283be.jpg', 'IMG_3072.jpg', 311205, 'image', 4, NULL, 1, '2025-11-12 09:20:28'),
 (50, 24, 'uploads/photos/location_24_691453255bda8.jpg', 'IMG_3072.jpg', 311205, 'image', 2, NULL, 1, '2025-11-12 09:28:07'),
-(49, 24, 'uploads/photos/location_24_691453228f1e8.jpg', 'IMG_3071.jpg', 445250, 'image', 1, NULL, 1, '2025-11-12 09:28:05');
+(49, 24, 'uploads/photos/location_24_691453228f1e8.jpg', 'IMG_3071.jpg', 445250, 'image', 1, NULL, 1, '2025-11-12 09:28:05'),
+(81, 35, 'uploads/photos/location_35_691eb0013a8df.jpg', 'IMG_3087.jpg', 241793, 'image', 1, NULL, 1, '2025-11-20 06:06:58'),
+(82, 35, 'uploads/photos/location_35_691eb002d8900.jpg', 'IMG_3091.jpg', 890590, 'image', 2, NULL, 1, '2025-11-20 06:07:01'),
+(83, 35, 'uploads/photos/location_35_691eb0059f7c4.jpg', 'IMG_3092.jpg', 653159, 'image', 3, NULL, 1, '2025-11-20 06:07:03'),
+(84, 35, 'uploads/photos/location_35_691eb007550f9.jpg', 'IMG_3094.jpg', 878051, 'image', 4, NULL, 1, '2025-11-20 06:07:06'),
+(85, 35, 'uploads/photos/location_vr_35_691eb00a19fa1.jpg', 'life10_360vr_01.jpg', 545682, 'vr360', 0, NULL, 1, '2025-11-20 06:07:06'),
+(86, 36, 'uploads/photos/location_36_691eb3b2988e6.jpg', 'IMG_3084.jpg', 206159, 'image', 1, NULL, 1, '2025-11-20 06:22:44'),
+(87, 36, 'uploads/photos/location_vr_36_691eb3b440922.jpg', 'life03_360vr_01.jpg', 495886, 'vr360', 0, NULL, 1, '2025-11-20 06:22:44');
 
 -- --------------------------------------------------------
 
@@ -481,6 +556,13 @@ CREATE TABLE `location_trees` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT '생성일시',
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT '수정일시'
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+--
+-- 테이블의 덤프 데이터 `location_trees`
+--
+
+INSERT INTO `location_trees` (`location_tree_id`, `location_id`, `species_id`, `quantity`, `size_spec`, `average_height`, `average_diameter`, `root_diameter`, `notes`, `created_at`, `updated_at`) VALUES
+(1, 31, 72, 100, 'W110, H0.5', 1.00, 20.00, 18.00, '', '2025-11-17 08:35:39', '2025-11-17 08:35:39');
 
 -- --------------------------------------------------------
 
@@ -658,7 +740,6 @@ INSERT INTO `tree_species_master` (`species_id`, `scientific_name`, `korean_name
 (36, 'Quercus dentata', '떡갈나무', 'Japanese emperor oak', '참나무과', '참나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
 (37, 'Quercus myrsinifolia', '가시나무', 'Chinese evergreen oak', '참나무과', '참나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
 (38, 'Fagus multinervis', '너도밤나무', 'Korean beech', '참나무과', '너도밤나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
-(39, 'Zelkova serrata', '느티나무', 'Japanese zelkova', '느릅나무과', '느티나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
 (40, 'Ulmus davidiana var. japonica', '느릅나무', 'Japanese elm', '느릅나무과', '느릅나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
 (41, 'Ulmus parvifolia', '참느릅나무', 'Chinese elm', '느릅나무과', '느릅나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
 (42, 'Acer palmatum', '단풍나무', 'Japanese maple', '단풍나무과', '단풍나무속', '', NULL, NULL, NULL, '2025-11-09 11:57:00'),
@@ -756,7 +837,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`user_id`, `username`, `email`, `password`, `role`, `name`, `phone`, `created_at`, `last_login`, `status`) VALUES
-(1, 'admin', 'sstree@korea.kr', '$2y$10$QROucntWQT31VoTfPJ1WJOh34sreI9/U7oFkn..cvmf0qlmpGXpri', 'admin', '관리자', '010-1234-5678', '2025-11-08 22:26:37', '2025-11-16 04:29:22', 'active'),
+(1, 'admin', 'sstree@korea.kr', '$2y$10$QROucntWQT31VoTfPJ1WJOh34sreI9/U7oFkn..cvmf0qlmpGXpri', 'admin', '관리자', '010-1234-5678', '2025-11-08 22:26:37', '2025-12-09 07:31:23', 'active'),
 (2, 'sstree', 'sstree@gmail.com', '$2y$10$ba3IAQ.Pqr5JPNXAZ06Ovey8IB9Kpl2jaOVkcfieiS4A5Vo06SAD2', 'manager', '정원산림총괄과', '010-1234-5678', '2025-11-11 23:40:27', '2025-11-11 14:51:08', 'active');
 
 --
@@ -771,6 +852,12 @@ ALTER TABLE `activity_logs`
   ADD KEY `idx_user_id` (`user_id`),
   ADD KEY `idx_action` (`action`),
   ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- 테이블의 인덱스 `admin`
+--
+ALTER TABLE `admin`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- 테이블의 인덱스 `categories`
@@ -868,7 +955,13 @@ ALTER TABLE `users`
 -- 테이블의 AUTO_INCREMENT `activity_logs`
 --
 ALTER TABLE `activity_logs`
-  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=300;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=314;
+
+--
+-- 테이블의 AUTO_INCREMENT `admin`
+--
+ALTER TABLE `admin`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- 테이블의 AUTO_INCREMENT `categories`
@@ -880,19 +973,19 @@ ALTER TABLE `categories`
 -- 테이블의 AUTO_INCREMENT `locations`
 --
 ALTER TABLE `locations`
-  MODIFY `location_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `location_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- 테이블의 AUTO_INCREMENT `location_photos`
 --
 ALTER TABLE `location_photos`
-  MODIFY `photo_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=68;
+  MODIFY `photo_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=88;
 
 --
 -- 테이블의 AUTO_INCREMENT `location_trees`
 --
 ALTER TABLE `location_trees`
-  MODIFY `location_tree_id` int(11) NOT NULL AUTO_INCREMENT COMMENT '장소별 수목 ID';
+  MODIFY `location_tree_id` int(11) NOT NULL AUTO_INCREMENT COMMENT '장소별 수목 ID', AUTO_INCREMENT=2;
 
 --
 -- 테이블의 AUTO_INCREMENT `regions`
