@@ -1,6 +1,6 @@
 <?php
 /**
- * 장소 목록
+ * 장소 관리 (Modern UI 적용)
  * Smart Tree Map - Location Management
  */
 
@@ -15,15 +15,15 @@ $page_title = '장소 관리';
 $database = new Database();
 $db = $database->getConnection();
 
-// 검색 및 필터 파라미터
+// 검색 및 필터 파라미터 처리
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $region_filter = isset($_GET['region']) ? $_GET['region'] : '';
 $category_filter = isset($_GET['category']) ? $_GET['category'] : '';
 $type_filter = isset($_GET['type']) ? $_GET['type'] : '';
 
-// 페이지네이션
+// 페이지네이션 설정
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$per_page = 20;
+$per_page = 15;
 $offset = ($page - 1) * $per_page;
 
 // WHERE 조건 구성
@@ -31,23 +31,17 @@ $where_conditions = ["1=1"];
 $params = [];
 
 if ($search) {
-    // road_name 컬럼이 존재하는지 확인 필요하지만, 일단 포함
     $where_conditions[] = "(l.location_name LIKE :search OR l.address LIKE :search OR l.road_name LIKE :search)";
     $params[':search'] = "%$search%";
 }
-
 if ($region_filter) {
-    // [수정] c.region_id -> l.region_id 로 변경
     $where_conditions[] = "l.region_id = :region_id";
     $params[':region_id'] = $region_filter;
 }
-
 if ($category_filter) {
-    // [수정] l.category_id 사용 (이미 맞음)
     $where_conditions[] = "l.category_id = :category_id";
     $params[':category_id'] = $category_filter;
 }
-
 if ($type_filter) {
     $where_conditions[] = "l.location_type = :location_type";
     $params[':location_type'] = $type_filter;
@@ -56,13 +50,11 @@ if ($type_filter) {
 $where_clause = implode(" AND ", $where_conditions);
 
 // 전체 개수 조회
-// [수정] location_categories -> categories, regions JOIN 조건 변경
 $count_query = "SELECT COUNT(*) as total
                 FROM locations l
                 LEFT JOIN categories c ON l.category_id = c.category_id
                 LEFT JOIN regions r ON l.region_id = r.region_id
                 WHERE $where_clause";
-
 $count_stmt = $db->prepare($count_query);
 foreach ($params as $key => $value) {
     $count_stmt->bindValue($key, $value);
@@ -71,8 +63,7 @@ $count_stmt->execute();
 $total_records = $count_stmt->fetch()['total'];
 $total_pages = ceil($total_records / $per_page);
 
-// 장소 목록 조회 (수목 수 포함)
-// [수정] 테이블명 및 조인 조건 수정
+// 장소 목록 조회
 $query = "SELECT 
             l.location_id,
             l.location_name,
@@ -81,6 +72,7 @@ $query = "SELECT
             l.road_name,
             l.length,
             l.location_type,
+            l.created_at,
             c.category_name,
             r.region_name,
             COUNT(DISTINCT lt.species_id) as species_count,
@@ -103,132 +95,36 @@ $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $locations = $stmt->fetchAll();
 
-// 필터용 데이터
-$regions_query = "SELECT * FROM regions ORDER BY region_name";
-$regions = $db->query($regions_query)->fetchAll();
-
-// [수정] 카테고리 쿼리 단순화 (regions와 조인 제거)
-$categories_query = "SELECT * FROM categories ORDER BY category_name";
-$categories = $db->query($categories_query)->fetchAll();
+// 필터용 데이터 조회
+$regions = $db->query("SELECT * FROM regions ORDER BY region_name")->fetchAll();
+$categories = $db->query("SELECT * FROM categories ORDER BY category_name")->fetchAll();
 
 include '../../includes/header.php';
 ?>
 
 <style>
-.location-filters {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
 
-.filter-row {
-    display: flex;
-    gap: 15px;
-    flex-wrap: wrap;
-    align-items: flex-end;
-}
+/* 버튼 스타일 */
+.btn { padding: 10px 18px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 0.95rem; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+.btn-secondary { background: white; border: 1px solid var(--border); color: var(--text-main); }
+.btn-secondary:hover { background: #F9FAFB; border-color: #9CA3AF; }
+.btn-danger { background: #fee2e2; color: #991b1b; }
+.btn-danger:hover { background: #fecaca; }
+.btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 
-.filter-group {
-    flex: 1;
-    min-width: 200px;
-}
+/* 테이블 스타일 */
+.table-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; background: white; }
+th { background: #F9FAFB; padding: 16px; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 1px solid var(--border); }
+td { padding: 16px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-main); font-size: 0.95rem; }
+tr:hover td { background-color: #F0FDF4; }
 
-.filter-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
-    color: #374151;
-    font-size: 14px;
-}
-
-.filter-group input,
-.filter-group select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 14px;
-}
-
-.filter-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.location-stats {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-}
-
-.stat-item {
-    text-align: center;
-}
-
-.stat-value {
-    font-size: 32px;
-    font-weight: 700;
-    margin-bottom: 5px;
-}
-
-.stat-label {
-    font-size: 14px;
-    opacity: 0.9;
-}
-
-.location-table {
-    background: white;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.location-table table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.location-table thead {
-    background: #f9fafb;
-}
-
-.location-table th {
-    padding: 15px;
-    text-align: left;
-    font-weight: 600;
-    color: #374151;
-    border-bottom: 2px solid #e5e7eb;
-}
-
-.location-table td {
-    padding: 15px;
-    border-bottom: 1px solid #e5e7eb;
-    color: #6b7280;
-}
-
-.location-table tbody tr:hover {
-    background: #f9fafb;
-}
-
-.location-type-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
+/* 뱃지 스타일 */
+.badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
+.badge-info { background: #DBEAFE; color: #1E40AF; }
+.type-badge { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
 .type-urban_forest { background: #dcfce7; color: #166534; }
 .type-street_tree { background: #dbeafe; color: #1e40af; }
 .type-living_forest { background: #fef3c7; color: #92400e; }
@@ -236,314 +132,250 @@ include '../../includes/header.php';
 .type-park { background: #e0e7ff; color: #3730a3; }
 .type-other { background: #f3f4f6; color: #374151; }
 
-.tree-count {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-weight: 600;
-}
-
-.tree-count .count {
-    color: #059669;
-}
-
-.tree-count .species {
-    color: #7c3aed;
-    font-size: 12px;
-}
-
-.action-buttons {
-    display: flex;
-    gap: 5px;
-}
-
-.btn-icon {
-    padding: 6px 10px;
-    font-size: 12px;
-}
-
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin-top: 20px;
-    padding: 20px;
-    background: white;
-    border-radius: 10px;
-}
-
-.pagination a,
-.pagination span {
-    padding: 8px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 5px;
-    text-decoration: none;
-    color: #374151;
-}
-
-.pagination a:hover {
-    background: #f9fafb;
-}
-
-.pagination .current {
-    background: #3b82f6;
-    color: white;
-    border-color: #3b82f6;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: #9ca3af;
-}
-
-.empty-state-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
-}
+/* 페이지네이션 */
+.pagination { display: flex; justify-content: center; gap: 5px; padding: 20px; }
+.page-link { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); text-decoration: none; font-size: 0.9rem; }
+.page-link:hover { background: #F9FAFB; }
+.page-link.active { background: var(--primary); color: white; border-color: var(--primary); }
 </style>
 
-<div class="page-header">
+<div class="page-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
     <div>
-        <h2>📍 장소 관리</h2>
-        <p>나무가 심어진 장소를 관리합니다</p>
+        <h2 style="margin: 0; font-size: 1.75rem; font-weight: 800; color: #111827;">📍 장소 관리</h2>
+        <p style="margin: 5px 0 0; color: #6B7280;">나무가 심어진 장소를 조회하고 관리합니다.</p>
     </div>
-    <a href="add.php" class="btn btn-primary">
-        ➕ 새 장소 추가
-    </a>
-</div>
+    <div style="display: flex; gap: 10px;">
+        <a href="add.php" class="btn btn-primary">
+            <span style="font-size: 1.2em;">+</span> 새 장소 등록
+        </a>
+        <a href="<?= BASE_URL ?>/admin/locations/bulk_photo_upload.php" class="btn btn-secondary">
+            📷 사진 일괄 업로드
+        </a>
 
-<div class="location-stats">
-    <div class="stats-grid">
-        <div class="stat-item">
-            <div class="stat-value"><?php echo number_format($total_records); ?></div>
-            <div class="stat-label">전체 장소</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">
-                <?php
-                // [수정] location_trees 테이블 사용
-                $total_trees_query = "SELECT SUM(quantity) as total FROM location_trees";
-                $total_trees = $db->query($total_trees_query)->fetch()['total'] ?? 0;
-                echo number_format($total_trees);
-                ?>
-            </div>
-            <div class="stat-label">전체 나무</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">
-                <?php
-                // [수정] location_trees 테이블 사용
-                $total_species_query = "SELECT COUNT(DISTINCT species_id) as total FROM location_trees";
-                $total_species = $db->query($total_species_query)->fetch()['total'] ?? 0;
-                echo number_format($total_species);
-                ?>
-            </div>
-            <div class="stat-label">수종 종류</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">
-                <?php
-                $area_query = "SELECT SUM(area) as total FROM locations WHERE area IS NOT NULL";
-                $area = $db->query($area_query)->fetch()['total'] ?? 0;
-                echo number_format($area);
-                ?>
-            </div>
-            <div class="stat-label">총 면적 (㎡)</div>
-        </div>
+		<a href="#" class="btn btn-secondary" onclick="exportLocations()" class="btn btn-secondary">
+            📥 엑셀 다운로드
+        </a>
     </div>
 </div>
 
-<div class="location-filters">
-    <form method="GET" action="">
-        <div class="filter-row">
-            <div class="filter-group">
-                <label>🔍 검색</label>
-                <input type="text" name="search" placeholder="장소명, 주소, 도로명 검색..." 
-                       value="<?php echo htmlspecialchars($search); ?>">
-            </div>
-            
-            <div class="filter-group">
-                <label>🗺️ 지역</label>
-                <select name="region" onchange="this.form.submit()">
-                    <option value="">전체 지역</option>
-                    <?php foreach ($regions as $region): ?>
-                        <option value="<?php echo $region['region_id']; ?>"
-                                <?php echo $region_filter == $region['region_id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($region['region_name']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            
-            <div class="filter-group">
-                <label>📁 카테고리</label>
-                <select name="category" onchange="this.form.submit()">
-                    <option value="">전체 카테고리</option>
-                    <?php foreach ($categories as $category): ?>
-                        <option value="<?php echo $category['category_id']; ?>"
-                                <?php echo $category_filter == $category['category_id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($category['category_name']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            
-            <div class="filter-group">
-                <label>🏷️ 유형</label>
-                <select name="type" onchange="this.form.submit()">
-                    <option value="">전체 유형</option>
-                    <option value="urban_forest" <?php echo $type_filter == 'urban_forest' ? 'selected' : ''; ?>>도시숲</option>
-                    <option value="street_tree" <?php echo $type_filter == 'street_tree' ? 'selected' : ''; ?>>가로수</option>
-                    <option value="living_forest" <?php echo $type_filter == 'living_forest' ? 'selected' : ''; ?>>생활숲</option>
-                    <option value="school" <?php echo $type_filter == 'school' ? 'selected' : ''; ?>>학교</option>
-                    <option value="park" <?php echo $type_filter == 'park' ? 'selected' : ''; ?>>공원</option>
-                    <option value="other" <?php echo $type_filter == 'other' ? 'selected' : ''; ?>>기타</option>
-                </select>
-            </div>
-            
-            <div class="filter-actions">
-                <button type="submit" class="btn btn-primary">검색</button>
-                <a href="index.php" class="btn btn-secondary">초기화</a>
-            </div>
+<div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px;">
+    <div class="card" style="margin: 0; padding: 20px; text-align: center;">
+        <div style="font-size: 2rem; font-weight: 800; color: var(--primary); margin-bottom: 5px;"><?php echo number_format($total_records); ?></div>
+        <div style="font-size: 0.9rem; color: var(--text-sub); font-weight: 600;">전체 장소</div>
+    </div>
+    <div class="card" style="margin: 0; padding: 20px; text-align: center;">
+        <?php
+        $total_trees_query = "SELECT SUM(quantity) as total FROM location_trees";
+        $total_trees = $db->query($total_trees_query)->fetch()['total'] ?? 0;
+        ?>
+        <div style="font-size: 2rem; font-weight: 800; color: var(--secondary); margin-bottom: 5px;"><?php echo number_format($total_trees); ?></div>
+        <div style="font-size: 0.9rem; color: var(--text-sub); font-weight: 600;">전체 나무</div>
+    </div>
+	<div class="card" style="margin: 0; padding: 20px; text-align: center;">
+        <?php
+        $total_species_query = "SELECT COUNT(DISTINCT species_id) as total FROM location_trees";
+        $total_species = $db->query($total_species_query)->fetch()['total'] ?? 0;
+        ?>
+        <div style="font-size: 2rem; font-weight: 800; color: #F59E0B; margin-bottom: 5px;">
+            <?php echo number_format($total_species); ?>
         </div>
-    </form>
+        <div style="font-size: 0.9rem; color: var(--text-sub); font-weight: 600;">전체 수종</div>
+    </div>
+    <div class="card" style="margin: 0; padding: 20px; text-align: center;">
+        <?php
+        $area_query = "SELECT SUM(area) as total FROM locations WHERE area IS NOT NULL";
+        $area = $db->query($area_query)->fetch()['total'] ?? 0;
+        ?>
+        <div style="font-size: 2rem; font-weight: 800; color: #8B5CF6; margin-bottom: 5px;"><?php echo number_format($area); ?></div>
+        <div style="font-size: 0.9rem; color: var(--text-sub); font-weight: 600;">총 면적 (㎡)</div>
+    </div>
 </div>
 
-<div class="location-table">
-    <?php if (count($locations) > 0): ?>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 50px;">ID</th>
-                    <th>장소명</th>
-                    <th>유형</th>
-                    <th>카테고리</th>
-                    <th>지역</th>
-                    <th>면적/거리</th>
-                    <th>수목 현황</th>
-                    <th style="width: 150px;">관리</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($locations as $location): ?>
+<form method="GET" action="index.php" class="filter-bar">
+    <div class="form-group" style="flex: 2;">
+        <label for="search">통합 검색</label>
+        <input type="text" id="search" name="search" placeholder="장소명, 주소, 도로명 검색..." value="<?php echo htmlspecialchars($search); ?>">
+    </div>
+    
+    <div class="form-group">
+        <label for="region">지역</label>
+        <select id="region" name="region" onchange="this.form.submit()">
+            <option value="">전체 지역</option>
+            <?php foreach ($regions as $region): ?>
+                <option value="<?php echo $region['region_id']; ?>" <?php echo $region_filter == $region['region_id'] ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($region['region_name']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="category">카테고리</label>
+        <select id="category" name="category" onchange="this.form.submit()">
+            <option value="">전체 카테고리</option>
+            <?php foreach ($categories as $category): ?>
+                <option value="<?php echo $category['category_id']; ?>" <?php echo $category_filter == $category['category_id'] ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($category['category_name']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="type">유형</label>
+        <select id="type" name="type" onchange="this.form.submit()">
+            <option value="">전체 유형</option>
+            <option value="urban_forest" <?php echo $type_filter == 'urban_forest' ? 'selected' : ''; ?>>도시숲</option>
+            <option value="street_tree" <?php echo $type_filter == 'street_tree' ? 'selected' : ''; ?>>가로수</option>
+            <option value="living_forest" <?php echo $type_filter == 'living_forest' ? 'selected' : ''; ?>>생활숲</option>
+            <option value="school" <?php echo $type_filter == 'school' ? 'selected' : ''; ?>>학교</option>
+            <option value="park" <?php echo $type_filter == 'park' ? 'selected' : ''; ?>>공원</option>
+            <option value="other" <?php echo $type_filter == 'other' ? 'selected' : ''; ?>>기타</option>
+        </select>
+    </div>
+    
+    <div style="padding-bottom: 2px;">
+        <button type="submit" class="btn btn-primary" style="height: 42px;">🔍 검색</button>
+        <a href="index.php" class="btn btn-secondary" style="height: 42px; width: 42px; justify-content: center; padding: 0;">↻</a>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="table-wrapper" style="border: none; border-radius: 0;">
+            <table>
+                <thead>
                     <tr>
-                        <td><?php echo $location['location_id']; ?></td>
-                        <td>
-                            <strong><?php echo htmlspecialchars($location['location_name']); ?></strong>
-                            <?php if ($location['address']): ?>
-                                <br><small style="color: #9ca3af;"><?php echo htmlspecialchars($location['address']); ?></small>
-                            <?php endif; ?>
-                            <?php if ($location['road_name']): ?>
-                                <br><small style="color: #9ca3af;">🛣️ <?php echo htmlspecialchars($location['road_name']); ?></small>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php
-                            $type_labels = [
-                                'urban_forest' => '도시숲',
-                                'street_tree' => '가로수',
-                                'living_forest' => '생활숲',
-                                'school' => '학교',
-                                'park' => '공원',
-                                'other' => '기타'
-                            ];
-                            $type = $location['location_type'] ?? 'other';
-                            ?>
-                            <span class="location-type-badge type-<?php echo $type; ?>">
-                                <?php echo $type_labels[$type] ?? '기타'; ?>
-                            </span>
-                        </td>
-                        <td><?php echo htmlspecialchars($location['category_name'] ?? '-'); ?></td>
-                        <td><?php echo htmlspecialchars($location['region_name'] ?? '-'); ?></td>
-                        <td>
-                            <?php if ($location['area']): ?>
-                                📐 <?php echo number_format($location['area'], 0); ?>㎡
-                            <?php elseif ($location['length']): ?>
-                                📏 <?php echo number_format($location['length'], 0); ?>m
-                            <?php else: ?>
-                                -
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ($location['total_trees'] > 0): ?>
-                                <div class="tree-count">
-                                    <span class="count">🌳 <?php echo number_format($location['total_trees']); ?>주</span>
-                                    <span class="species">(<?php echo $location['species_count']; ?>종)</span>
-                                </div>
-                            <?php else: ?>
-                                <span style="color: #d1d5db;">수목 없음</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <div class="action-buttons">
-                                <a href="view.php?id=<?php echo $location['location_id']; ?>" 
-                                   class="btn btn-info btn-icon" title="상세보기">
-                                    👁️
-                                </a>
-                                <a href="edit.php?id=<?php echo $location['location_id']; ?>" 
-                                   class="btn btn-primary btn-icon" title="수정">
-                                    ✏️
-                                </a>
-                                <a href="delete.php?id=<?php echo $location['location_id']; ?>" 
-                                   class="btn btn-danger btn-icon" 
-                                   onclick="return confirm('정말 삭제하시겠습니까?\n관련된 수목 데이터도 모두 삭제됩니다.');"
-                                   title="삭제">
-                                    🗑️
-                                </a>
-                            </div>
-                        </td>
+                        <th style="width: 50px;">ID</th>
+                        <th>장소명</th>
+                        <th>유형</th>
+                        <th>지역/카테고리</th>
+                        <th>면적/거리</th>
+                        <th>수목 현황</th>
+                        <th style="width: 180px;">관리</th>
                     </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php else: ?>
-        <div class="empty-state">
-            <div class="empty-state-icon">📍</div>
-            <h3>장소가 없습니다</h3>
-            <p>새로운 장소를 추가해주세요.</p>
-            <a href="add.php" class="btn btn-primary" style="margin-top: 20px;">
-                ➕ 첫 장소 추가하기
-            </a>
+                </thead>
+                <tbody>
+                    <?php if (count($locations) > 0): ?>
+					
+                        <?php 
+                        // 연번(가상 번호) 시작값 계산
+                        // 전체 갯수 - ((현재페이지-1) * 페이지당갯수)
+                        $virtual_num = $total_records - ($offset);
+                        
+                        foreach ($locations as $location): 
+                        ?>
+						    <tr>
+                                <td style="color: var(--text-sub); font-weight: 500;">
+                                    <?php echo $virtual_num--; ?>
+                                </td>
+
+
+                                <td>
+                                    <a href="view.php?id=<?php echo $location['location_id']; ?>" style="font-weight: 700; color: var(--text-main); text-decoration: none; font-size: 1.05rem;">
+                                        <?php echo htmlspecialchars($location['location_name']); ?>
+                                    </a>
+                                    <?php if ($location['address']): ?>
+                                        <div style="font-size: 0.85rem; color: #9CA3AF; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
+                                            📍 <?php echo htmlspecialchars($location['address']); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php
+                                    $type_labels = [
+                                        'urban_forest' => '도시숲', 'street_tree' => '가로수', 'living_forest' => '생활숲',
+                                        'school' => '학교', 'park' => '공원', 'other' => '기타'
+                                    ];
+                                    $type = $location['location_type'] ?? 'other';
+                                    ?>
+                                    <span class="type-badge type-<?php echo $type; ?>">
+                                        <?php echo $type_labels[$type] ?? '기타'; ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style="font-weight: 500; color: #4B5563;"><?php echo htmlspecialchars($location['region_name']); ?></div>
+                                    <div style="font-size: 0.8rem; color: var(--text-sub);"><?php echo htmlspecialchars($location['category_name']); ?></div>
+                                </td>
+                                <td>
+                                    <?php if ($location['area']): ?>
+                                        <div style="font-weight: 600; color: #8B5CF6;">📐 <?php echo number_format($location['area']); ?>㎡</div>
+                                    <?php elseif ($location['length']): ?>
+                                        <div style="font-weight: 600; color: #F59E0B;">📏 <?php echo number_format($location['length']); ?>m</div>
+                                    <?php else: ?>
+                                        <span style="color: #D1D5DB;">-</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($location['total_trees'] > 0): ?>
+                                        <div style="font-weight: 700; color: var(--primary);">🌳 <?php echo number_format($location['total_trees']); ?>주</div>
+                                        <div style="font-size: 0.8rem; color: #6B7280;">(<?php echo $location['species_count']; ?>종)</div>
+                                    <?php else: ?>
+                                        <span style="color: #D1D5DB; font-size: 0.9rem;">수목 없음</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 6px;">
+                                        <a href="view.php?id=<?php echo $location['location_id']; ?>" class="btn btn-secondary btn-sm">상세</a>
+                                        <a href="edit.php?id=<?php echo $location['location_id']; ?>" class="btn btn-secondary btn-sm" title="수정">✏️</a>
+                                        <?php if (isAdmin()): ?>
+                                            <a href="delete.php?id=<?php echo $location['location_id']; ?>" 
+                                               class="btn btn-danger btn-sm" 
+                                               onclick="return confirm('이 장소를 삭제하시겠습니까?\n연결된 모든 데이터가 삭제됩니다.');" title="삭제">🗑️</a>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 60px 0;">
+                                <div style="font-size: 3rem; margin-bottom: 10px;">📍</div>
+                                <div style="color: #6B7280; font-size: 1.1rem;">등록된 장소가 없습니다.</div>
+                                <div style="color: #9CA3AF; font-size: 0.9rem; margin-top: 5px;">새로운 장소를 등록해보세요!</div>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
-    <?php endif; ?>
+    </div>
 </div>
 
 <?php if ($total_pages > 1): ?>
     <div class="pagination">
         <?php if ($page > 1): ?>
-            <a href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&region=<?php echo $region_filter; ?>&category=<?php echo $category_filter; ?>&type=<?php echo $type_filter; ?>">
-                ← 이전
-            </a>
+            <a href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&region=<?php echo $region_filter; ?>&category=<?php echo $category_filter; ?>&type=<?php echo $type_filter; ?>" class="page-link">←</a>
         <?php endif; ?>
         
         <?php
         $start_page = max(1, $page - 2);
         $end_page = min($total_pages, $page + 2);
-        
         for ($i = $start_page; $i <= $end_page; $i++):
         ?>
-            <?php if ($i == $page): ?>
-                <span class="current"><?php echo $i; ?></span>
-            <?php else: ?>
-                <a href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&region=<?php echo $region_filter; ?>&category=<?php echo $category_filter; ?>&type=<?php echo $type_filter; ?>">
-                    <?php echo $i; ?>
-                </a>
-            <?php endif; ?>
+            <a href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&region=<?php echo $region_filter; ?>&category=<?php echo $category_filter; ?>&type=<?php echo $type_filter; ?>" 
+               class="page-link <?php echo $i == $page ? 'active' : ''; ?>">
+                <?php echo $i; ?>
+            </a>
         <?php endfor; ?>
         
         <?php if ($page < $total_pages): ?>
-            <a href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&region=<?php echo $region_filter; ?>&category=<?php echo $category_filter; ?>&type=<?php echo $type_filter; ?>">
-                다음 →
-            </a>
+            <a href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&region=<?php echo $region_filter; ?>&category=<?php echo $category_filter; ?>&type=<?php echo $type_filter; ?>" class="page-link">→</a>
         <?php endif; ?>
-        
-        <span style="margin-left: 20px; color: #6b7280;">
-            전체 <?php echo number_format($total_records); ?>개 중 
-            <?php echo number_format($offset + 1); ?>~<?php echo number_format(min($offset + $per_page, $total_records)); ?>
-        </span>
     </div>
 <?php endif; ?>
+
+<script>
+function exportLocations() {
+    const params = new URLSearchParams(window.location.search);
+    const exportUrl = '../export/locations.php?' + params.toString();
+    
+    const filterText = params.toString() ? '현재 필터 조건으로' : '전체';
+    if (confirm(filterText + ' 장소 데이터를 엑셀로 내보내시겠습니까?')) {
+        window.location.href = exportUrl;
+    }
+}
+</script>
+
 
 <?php include '../../includes/footer.php'; ?>

@@ -1,6 +1,6 @@
 <?php
 /**
- * 장소 수정 (도로종류 추가 및 모든 기능 통합)
+ * 장소 수정 (카카오 길찾기 기반 경로 그리기 통합)
  * Smart Tree Map - Location Management
  */
 
@@ -20,12 +20,53 @@ $location_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!$location_id) {
     $_SESSION['error_message'] = '잘못된 접근입니다.';
-    header('Location: index.php');
+    header('Location: list.php');
     exit;
 }
 
 // 허용 확장자 설정
 $allowed_ext_array = array_map('trim', array_map('strtolower', explode(',', ALLOWED_EXTENSIONS)));
+
+// [추가] GPS 좌표 변환 헬퍼 함수
+function gps2Num($coordPart) {
+    $parts = explode('/', $coordPart);
+    if (count($parts) <= 0) return 0;
+    if (count($parts) == 1) return $parts[0];
+    return floatval($parts[0]) / floatval($parts[1]);
+}
+
+// [추가] EXIF에서 GPS 추출 함수
+function getGPSFromExif($file) {
+    if (!function_exists('exif_read_data')) return null;
+    $exif = @exif_read_data($file);
+    
+    if (isset($exif['GPSLatitude']) && isset($exif['GPSLatitudeRef']) && 
+        isset($exif['GPSLongitude']) && isset($exif['GPSLongitudeRef'])) {
+        
+        $latRef = $exif['GPSLatitudeRef'];
+        $lat    = $exif['GPSLatitude'];
+        $lngRef = $exif['GPSLongitudeRef'];
+        $lng    = $exif['GPSLongitude'];
+        
+        $lat_deg = count($lat) > 0 ? gps2Num($lat[0]) : 0;
+        $lat_min = count($lat) > 1 ? gps2Num($lat[1]) : 0;
+        $lat_sec = count($lat) > 2 ? gps2Num($lat[2]) : 0;
+        
+        $lng_deg = count($lng) > 0 ? gps2Num($lng[0]) : 0;
+        $lng_min = count($lng) > 1 ? gps2Num($lng[1]) : 0;
+        $lng_sec = count($lng) > 2 ? gps2Num($lng[2]) : 0;
+        
+        $latitude = $lat_deg + ($lat_min / 60) + ($lat_sec / 3600);
+        $longitude = $lng_deg + ($lng_min / 60) + ($lng_sec / 3600);
+        
+        if ($latRef == 'S') $latitude *= -1;
+        if ($lngRef == 'W') $longitude *= -1;
+        
+        return ['lat' => $latitude, 'lng' => $longitude];
+    }
+    return null;
+}
+
 
 /**
  * 자동 회전 보정 기능이 포함된 리사이징 함수
@@ -38,92 +79,93 @@ function autoOrientImage($image_resource, $source_path) {
     $exif = @exif_read_data($source_path);
     if (!empty($exif['Orientation'])) {
         switch ($exif['Orientation']) {
-            case 3:
-                $image_resource = imagerotate($image_resource, 180, 0);
-                break;
-            case 6:
-                $image_resource = imagerotate($image_resource, -90, 0);
-                break;
-            case 8:
-                $image_resource = imagerotate($image_resource, 90, 0);
-                break;
+            case 3: $image_resource = imagerotate($image_resource, 180, 0); break;
+            case 6: $image_resource = imagerotate($image_resource, -90, 0); break;
+            case 8: $image_resource = imagerotate($image_resource, 90, 0); break;
         }
     }
     return $image_resource;
 }
 
-function processAndSaveImage($source_path, $destination_path, $max_width = 1920, $quality = 85) {
+// [수정] 이미지 리사이즈 및 저장 (1MB 최적화 적용)
+function processAndSaveImage($src, $dest, $quality = 80) {
     ini_set('memory_limit', '512M');
     set_time_limit(300);
-
     try {
-        $info = getimagesize($source_path);
+        $info = getimagesize($src);
         if (!$info) return false;
-        $mime = $info['mime'];
-        $width = $info[0];
-        $height = $info[1];
         
-        if ($width <= $max_width) {
-            $new_width = $width;
-            $new_height = $height;
+        list($w, $h, $type) = [$info[0], $info[1], $info['mime']];
+        
+        // 1MB 이하 최적화 (Max 1920px)
+        $max_dimension = 1920;
+        if ($w > $max_dimension || $h > $max_dimension) {
+            $ratio = $max_dimension / max($w, $h);
+            $newW = (int)($w * $ratio);
+            $newH = (int)($h * $ratio);
         } else {
-            $new_width = $max_width;
-            $new_height = (int)(($height / $width) * $new_width);
+            $newW = $w;
+            $newH = $h;
         }
         
-        $destination_image = imagecreatetruecolor((int)$new_width, (int)$new_height);
-        $source_image = null;
-
-        switch ($mime) {
-            case 'image/jpeg': 
-                $source_image = imagecreatefromjpeg($source_path); 
-                $source_image = autoOrientImage($source_image, $source_path);
+        $destImg = imagecreatetruecolor($newW, $newH);
+        
+        switch ($type) {
+            case 'image/jpeg':
+                $srcImg = imagecreatefromjpeg($src);
+                $srcImg = autoOrientImage($srcImg, $src);
                 break;
-            case 'image/png': 
-                $source_image = imagecreatefrompng($source_path); 
-                imagealphablending($destination_image, false);
-                imagesavealpha($destination_image, true);
+            case 'image/png':
+                $srcImg = imagecreatefrompng($src);
+                imagealphablending($destImg, false);
+                imagesavealpha($destImg, true);
                 break;
-            case 'image/gif': 
-                $source_image = imagecreatefromgif($source_path); 
+            case 'image/gif':
+                $srcImg = imagecreatefromgif($src);
                 break;
             default:
-                imagedestroy($destination_image);
-                return move_uploaded_file($source_path, $destination_path);
+                imagedestroy($destImg);
+                return move_uploaded_file($src, $dest);
         }
-
-        if ($source_image === null) return false;
-
-        imagecopyresampled($destination_image, $source_image, 0, 0, 0, 0, (int)$new_width, (int)$new_height, $width, $height);
+        
+        if (!$srcImg) return false;
+        imagecopyresampled($destImg, $srcImg, 0, 0, 0, 0, $newW, $newH, $w, $h);
         
         $success = false;
-        switch ($mime) {
-            case 'image/jpeg': $success = imagejpeg($destination_image, $destination_path, $quality); break;
-            case 'image/png': $success = imagepng($destination_image, $destination_path, 8); break;
-            case 'image/gif': $success = imagegif($destination_image, $destination_path); break;
+        switch ($type) {
+            case 'image/jpeg': $success = imagejpeg($destImg, $dest, $quality); break;
+            case 'image/png':  $success = imagepng($destImg, $dest, 8); break;
+            case 'image/gif':  $success = imagegif($destImg, $dest); break;
         }
         
-        imagedestroy($source_image);
-        imagedestroy($destination_image);
-        return $success;
+        imagedestroy($srcImg);
+        imagedestroy($destImg);
+        
+        // 1MB 초과 시 재압축 (JPEG)
+        if ($success && file_exists($dest) && filesize($dest) > 1048576 && $type === 'image/jpeg') {
+            $tempImg = imagecreatefromjpeg($dest);
+            imagejpeg($tempImg, $dest, 60);
+            imagedestroy($tempImg);
+        }
 
-    } catch (Exception $e) {
-        return false;
-    }
+        return $success;
+    } catch (Exception $e) { return false; }
 }
 
 // 폼 제출 처리
+// 폼 제출 처리
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $saved_files = []; // 롤백용 파일 목록
+    $saved_files = [];
 
     try {
+        // ... (POST 변수 수신 부분 기존과 동일) ...
         $region_id = isset($_POST['region_id']) ? (int)$_POST['region_id'] : 0;
         $category_id = $_POST['category_id'];
         $location_name = trim($_POST['location_name']);
         $address = trim($_POST['address']);
         $area = $_POST['area'] ? floatval($_POST['area']) : null;
         $road_name = trim($_POST['road_name']);
-        $road_type = trim($_POST['road_type']); // [추가]
+        $road_type = trim($_POST['road_type']);
         $section_start = trim($_POST['section_start']);
         $section_end = trim($_POST['section_end']);
         $length = $_POST['length'] ? floatval($_POST['length']) : null;
@@ -131,128 +173,99 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $location_type = $_POST['location_type'];
         $latitude = $_POST['latitude'] ? floatval($_POST['latitude']) : null;
         $longitude = $_POST['longitude'] ? floatval($_POST['longitude']) : null;
-
-        // [수정] 누락된 필드 변수 처리
         $establishment_year = !empty($_POST['establishment_year']) ? (int)$_POST['establishment_year'] : null;
         $management_agency = trim($_POST['management_agency']);
-
         $manager_name = trim($_POST['manager_name']);
         $manager_contact = trim($_POST['manager_contact']);
         $description = trim($_POST['description']);
         $video_url = trim($_POST['video_url']);
+        $geom_path = isset($_POST['geom_path']) ? trim($_POST['geom_path']) : null;
         
         // 유효성 검사
         if (empty($location_name)) throw new Exception('장소명을 입력해주세요.');
         if (empty($region_id)) throw new Exception('지역을 선택해주세요.');
         if (empty($category_id)) throw new Exception('카테고리를 선택해주세요.');
         
-        // 트랜잭션 시작
         $db->beginTransaction();
 
-        // 장소 수정 (road_type 추가)
+        // 장소 정보 업데이트 쿼리 (기존과 동일)
         $update_query = "UPDATE locations SET
-                         region_id = :region_id,
-                         category_id = :category_id,
-                         location_name = :location_name,
-                         address = :address,
-                         area = :area,
-                         road_name = :road_name,
-                         road_type = :road_type,
-                         section_start = :section_start,
-                         section_end = :section_end,
-                         length = :length,
-                         width = :width,
-                         location_type = :location_type,
-                         latitude = :latitude,
-                         longitude = :longitude,
-                         establishment_year = :establishment_year,
-						 management_agency = :management_agency, 
-                         manager_name = :manager_name,
-                         manager_contact = :manager_contact,
-                         description = :description,
-                         video_url = :video_url,
-                         updated_at = CURRENT_TIMESTAMP
+                         region_id = :region_id, category_id = :category_id, location_name = :location_name,
+                         address = :address, area = :area, road_name = :road_name, road_type = :road_type,
+                         section_start = :section_start, section_end = :section_end, length = :length, width = :width,
+                         location_type = :location_type, latitude = :latitude, longitude = :longitude,
+                         establishment_year = :establishment_year, management_agency = :management_agency, 
+                         manager_name = :manager_name, manager_contact = :manager_contact,
+                         description = :description, video_url = :video_url, updated_at = CURRENT_TIMESTAMP
                          WHERE location_id = :location_id";
         
         $stmt = $db->prepare($update_query);
-        $stmt->bindParam(':region_id', $region_id);
-        $stmt->bindParam(':category_id', $category_id);
-        $stmt->bindParam(':location_name', $location_name);
-        $stmt->bindParam(':address', $address);
-        $stmt->bindParam(':area', $area);
-        $stmt->bindParam(':road_name', $road_name);
-        $stmt->bindParam(':road_type', $road_type); // [추가]
-        $stmt->bindParam(':section_start', $section_start);
-        $stmt->bindParam(':section_end', $section_end);
-        $stmt->bindParam(':length', $length);
-        $stmt->bindParam(':width', $width);
-        $stmt->bindParam(':location_type', $location_type);
-        $stmt->bindParam(':latitude', $latitude);
-        $stmt->bindParam(':longitude', $longitude);
+        $stmt->execute([
+            ':region_id' => $region_id, ':category_id' => $category_id, ':location_name' => $location_name,
+            ':address' => $address, ':area' => $area, ':road_name' => $road_name, ':road_type' => $road_type,
+            ':section_start' => $section_start, ':section_end' => $section_end, ':length' => $length, ':width' => $width,
+            ':location_type' => $location_type, ':latitude' => $latitude, ':longitude' => $longitude,
+            ':establishment_year' => $establishment_year, ':management_agency' => $management_agency,
+            ':manager_name' => $manager_name, ':manager_contact' => $manager_contact, ':description' => $description,
+            ':video_url' => $video_url, ':location_id' => $location_id
+        ]);
 
-        $stmt->bindParam(':establishment_year', $establishment_year);
-        $stmt->bindParam(':management_agency', $management_agency);
+        // 공간 데이터 저장 (기존과 동일)
+        if ($latitude && $longitude) {
+            $db->prepare("UPDATE locations SET geom_point = PointFromText(:wkt) WHERE location_id = :id")
+               ->execute([':wkt' => "POINT($longitude $latitude)", ':id' => $location_id]);
+        }
+        if (!empty($geom_path) && (strpos($geom_path, 'LINESTRING') === 0 || strpos($geom_path, 'POLYGON') === 0)) {
+            $db->prepare("UPDATE locations SET geom_polygon = GeomFromText(:wkt) WHERE location_id = :id")
+               ->execute([':wkt' => $geom_path, ':id' => $location_id]);
+        }
 
-        $stmt->bindParam(':manager_name', $manager_name);
-        $stmt->bindParam(':manager_contact', $manager_contact);
-        $stmt->bindParam(':description', $description);
-        $stmt->bindParam(':video_url', $video_url);
-        $stmt->bindParam(':location_id', $location_id);
+        // --- 파일 업로드 처리 (수정됨) ---
+        $upload_dir = UPLOAD_PATH;
+        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
         
-        $stmt->execute();
-
-        // --- 파일 업로드 처리 ---
-        $upload_error = false;
-        $error_details = '';
-        $max_mb = MAX_FILE_SIZE / 1024 / 1024;
+        // 파일명 안전 변환을 위한 이름 준비
+        $safe_loc_name = preg_replace('/[^a-zA-Z0-9가-힣_-]/u', '', str_replace(' ', '_', $location_name));
+        if (empty($safe_loc_name)) $safe_loc_name = 'location';
 
         // 1. 일반 이미지 업로드
         if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
-            $upload_dir = UPLOAD_PATH;
-            if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
-            
             $max_order_query = "SELECT COALESCE(MAX(sort_order), 0) as max_order FROM location_photos WHERE location_id = :location_id AND photo_type = 'image'";
             $max_order_stmt = $db->prepare($max_order_query);
-            $max_order_stmt->bindParam(':location_id', $location_id);
-            $max_order_stmt->execute();
+            $max_order_stmt->execute([':location_id' => $location_id]);
             $sort_order = $max_order_stmt->fetch()['max_order'] + 1;
             
             foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
                 if (empty($tmp_name) || $_FILES['images']['error'][$key] !== UPLOAD_ERR_OK) continue;
                 
                 $file_name = $_FILES['images']['name'][$key];
-                $file_size = $_FILES['images']['size'][$key];
                 $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
                 
-                if (!in_array($file_ext, $allowed_ext_array)) {
-                    $error_details .= "{$file_name}: 허용되지 않는 파일 형식입니다.<br>";
-                    $upload_error = true;
-                } elseif ($file_size > MAX_FILE_SIZE) {
-                    $error_details .= "{$file_name}: 파일 용량이 너무 큽니다.<br>";
-                    $upload_error = true;
-                } else {
+                if (in_array($file_ext, $allowed_ext_array)) {
+                    
+					// [수정] 안전한 파일명 사용
                     $new_file_name = 'location_' . $location_id . '_' . uniqid() . '.' . $file_ext;
                     $file_path = $upload_dir . $new_file_name;
 
-                    if (processAndSaveImage($tmp_name, $file_path, 1920, 85)) {
-                        $saved_files[] = $file_path; // 롤백용
 
-                        $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, photo_type, sort_order, uploaded_by, uploaded_at) VALUES (:location_id, :file_path, :file_name, :file_size, 'image', :sort_order, :uploaded_by, NOW())";
-                        $photo_stmt = $db->prepare($photo_query);
+                    // [추가] GPS 추출 (원본 파일에서)
+                    $gps = getGPSFromExif($tmp_name);
+                    $gpsLat = $gps ? $gps['lat'] : null;
+                    $gpsLng = $gps ? $gps['lng'] : null;
+
+                    if (processAndSaveImage($tmp_name, $file_path, 80)) {
+                        $saved_files[] = $file_path;
                         $relative_path = 'uploads/photos/' . $new_file_name;
-                        $file_size_after_compress = filesize($file_path);
                         
-                        $photo_stmt->bindParam(':location_id', $location_id);
-                        $photo_stmt->bindParam(':file_path', $relative_path);
-                        $photo_stmt->bindParam(':file_name', $file_name);
-                        $photo_stmt->bindParam(':file_size', $file_size_after_compress);
-                        $photo_stmt->bindParam(':sort_order', $sort_order);
-                        $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
-                        $photo_stmt->execute();
+                        // [수정] gps_latitude, gps_longitude 추가
+                        $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, photo_type, sort_order, gps_latitude, gps_longitude, uploaded_by, uploaded_at) VALUES (:location_id, :file_path, :file_name, :file_size, 'image', :sort_order, :gpsLat, :gpsLng, :uploaded_by, NOW())";
+                        $photo_stmt = $db->prepare($photo_query);
+                        $photo_stmt->execute([
+                            ':location_id' => $location_id, ':file_path' => $relative_path, ':file_name' => $file_name,
+                            ':file_size' => filesize($file_path), ':sort_order' => $sort_order,
+                            ':gpsLat' => $gpsLat, ':gpsLng' => $gpsLng, ':uploaded_by' => $_SESSION['user_id']
+                        ]);
                         $sort_order++;
-                    } else {
-                        $error_details .= "{$file_name}: 파일 저장 중 오류가 발생했습니다.<br>";
-                        $upload_error = true;
                     }
                 }
             }
@@ -262,47 +275,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if (isset($_FILES['vr_photo']) && !empty($_FILES['vr_photo']['tmp_name'])) {
             if ($_FILES['vr_photo']['error'] === UPLOAD_ERR_OK) {
                 $file_name = $_FILES['vr_photo']['name'];
-                $file_size = $_FILES['vr_photo']['size'];
                 $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-
-                if (!in_array($file_ext, $allowed_ext_array)) {
-                    $error_details .= "{$file_name} (VR): 허용되지 않는 파일 형식입니다.<br>";
-                    $upload_error = true;
-                } elseif ($file_size > MAX_FILE_SIZE) {
-                    $error_details .= "{$file_name} (VR): 파일 용량이 너무 큽니다.<br>";
-                    $upload_error = true;
-                } else {
+                
+                if (in_array($file_ext, $allowed_ext_array)) {
+                    // [수정] 안전한 파일명 사용
                     $new_file_name = 'location_vr_' . $location_id . '_' . uniqid() . '.' . $file_ext;
                     $file_path = $upload_dir . $new_file_name;
 
-                    if (processAndSaveImage($_FILES['vr_photo']['tmp_name'], $file_path, 4096, 90)) {
+                    // [추가] GPS 추출
+                    $gps = getGPSFromExif($_FILES['vr_photo']['tmp_name']);
+                    $gpsLat = $gps ? $gps['lat'] : null;
+                    $gpsLng = $gps ? $gps['lng'] : null;
+
+                    if (processAndSaveImage($_FILES['vr_photo']['tmp_name'], $file_path, 90)) {
                         $saved_files[] = $file_path;
-
-                        $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, photo_type, uploaded_by, uploaded_at) VALUES (:location_id, :file_path, :file_name, :file_size, 'vr360', :uploaded_by, NOW())";
-                        $photo_stmt = $db->prepare($photo_query);
                         $relative_path = 'uploads/photos/' . $new_file_name;
-                        $file_size_after_compress = filesize($file_path);
 
-                        $photo_stmt->bindParam(':location_id', $location_id);
-                        $photo_stmt->bindParam(':file_path', $relative_path);
-                        $photo_stmt->bindParam(':file_name', $file_name);
-                        $photo_stmt->bindParam(':file_size', $file_size_after_compress);
-                        $photo_stmt->bindParam(':uploaded_by', $_SESSION['user_id']);
-                        $photo_stmt->execute();
-                    } else {
-                        $error_details .= "{$file_name} (VR): 파일 저장 중 오류가 발생했습니다.<br>";
-                        $upload_error = true;
+                        // [수정] gps_latitude, gps_longitude 추가
+                        $photo_query = "INSERT INTO location_photos (location_id, file_path, file_name, file_size, photo_type, gps_latitude, gps_longitude, uploaded_by, uploaded_at) VALUES (:location_id, :file_path, :file_name, :file_size, 'vr360', :gpsLat, :gpsLng, :uploaded_by, NOW())";
+                        $photo_stmt = $db->prepare($photo_query);
+                        $photo_stmt->execute([
+                            ':location_id' => $location_id, ':file_path' => $relative_path, ':file_name' => $file_name,
+                            ':file_size' => filesize($file_path), ':gpsLat' => $gpsLat, ':gpsLng' => $gpsLng, ':uploaded_by' => $_SESSION['user_id']
+                        ]);
                     }
                 }
             }
         }
 
-        if ($upload_error) {
-            throw new Exception("파일 업로드 실패:<br>" . $error_details);
-        }
-
         $db->commit();
-        
         $_SESSION['success_message'] = '장소가 성공적으로 수정되었습니다.';
         header('Location: view.php?id=' . $location_id);
         exit;
@@ -310,17 +311,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } catch (Exception $e) {
         $db->rollBack();
         foreach ($saved_files as $file_to_delete) {
-            if (file_exists($file_to_delete)) {
-                @unlink($file_to_delete);
-            }
+            if (file_exists($file_to_delete)) @unlink($file_to_delete);
         }
         $error_message = $e->getMessage();
     }
 }
 
 // GET 데이터 조회
-// 장소 정보
-$query = "SELECT * FROM locations WHERE location_id = :location_id";
+$query = "SELECT *, AsText(geom_polygon) as geom_wkt FROM locations WHERE location_id = :location_id";
 $stmt = $db->prepare($query);
 $stmt->bindParam(':location_id', $location_id);
 $stmt->execute();
@@ -328,7 +326,7 @@ $location = $stmt->fetch();
 
 if (!$location) {
     $_SESSION['error_message'] = '장소를 찾을 수 없습니다.';
-    header('Location: index.php');
+    header('Location: list.php');
     exit;
 }
 
@@ -353,148 +351,118 @@ $categories = $db->query($categories_query)->fetchAll();
 include '../../includes/header.php';
 ?>
 
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
 <style>
-.form-container {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    max-width: 1200px;
-    margin: 0 auto;
-}
-.form-section {
-    margin-bottom: 30px;
-    padding-bottom: 30px;
-    border-bottom: 2px solid #f3f4f6;
-}
+.form-container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); max-width: 100%; margin: 0 auto; }
+.form-section { margin-bottom: 30px; padding-bottom: 30px; border-bottom: 2px solid #f3f4f6; }
 .form-section:last-child { border-bottom: none; }
-.form-section-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.form-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-}
+.form-section-title { font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
 .form-group { margin-bottom: 20px; }
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: #374151;
-}
+.form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #374151; }
 .form-group label .required { color: #ef4444; margin-left: 4px; }
-.form-group input, .form-group select, .form-group textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 14px;
-}
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
 .form-group textarea { min-height: 100px; resize: vertical; }
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-.form-group .help-text {
-    font-size: 12px;
-    color: #6b7280;
-    margin-top: 5px;
-}
-#map {
-    width: 100%;
-    height: 400px;
-    border-radius: 8px;
-    margin-top: 10px;
-}
-.gps-info {
-    background: #f0fdf4;
-    border: 1px solid #86efac;
-    border-radius: 5px;
-    padding: 12px;
-    margin-top: 10px;
-    font-size: 14px;
-}
-.gps-info strong { color: #166534; }
-.form-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 2px solid #f3f4f6;
-}
-.image-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-.image-preview-item { width: 120px; height: 120px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; position: relative; }
-.image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
-.existing-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px; }
-.existing-photo-item { position: relative; }
-.existing-photo-item img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
-.existing-photo-item .delete-link { 
-    position: absolute; top: 5px; right: 5px; 
-    background: rgba(239, 68, 68, 0.9); color: white; 
-    padding: 4px 8px; border-radius: 4px; font-size: 11px; text-decoration: none;
-}
-.existing-photo-item .vr-badge { 
-    position: absolute; bottom: 5px; left: 5px; 
-    background: rgba(0,0,0,0.7); color: white; 
-    padding: 2px 6px; border-radius: 4px; font-size: 11px; 
-}
+.form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; padding-top: 20px; border-top: 2px solid #f3f4f6; }
 .dynamic-field { display: none; }
 .dynamic-field.active { display: block; }
+
+/* 지도 스타일 */
+#map { width: 100%; height: 500px; border-radius: 8px; position: relative; overflow: hidden; border: 1px solid #ddd; }
+.map-controls { position: absolute; top: 10px; right: 10px; z-index: 20; display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; width: 90%; }
+.map-btn { background: white; border: 1px solid #999; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; color: #333; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin-bottom:5px; }
+.map-btn:hover { background: #f8f9fa; }
+.map-btn.active { background: #4a90e2; color: white; border-color: #357abd; }
+
+.mode-group { display:flex; gap:0; margin-right:10px; }
+.mode-btn { background: #fff; border: 1px solid #999; padding: 6px 10px; cursor: pointer; font-size: 12px; font-weight: bold; color: #333; }
+.mode-btn:first-child { border-radius: 4px 0 0 4px; border-right: none; }
+.mode-btn:last-child { border-radius: 0 4px 4px 0; }
+.mode-btn.selected { background: #004c80; color: white; border-color: #004c80; z-index: 1; }
+
+.map-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 30; background: rgba(0,0,0,0.7); color: white; padding: 10px 20px; border-radius: 5px; display: none; font-size: 14px; }
+.gps-info { background: #f0fdf4; border: 1px solid #86efac; border-radius: 5px; padding: 12px; margin-top: 10px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+
+.route-guide { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 25; background: rgba(0,0,0,0.85); color: white; padding: 10px 20px; border-radius: 8px; font-size: 13px; display: none; text-align: center; }
+.route-guide.active { display: block; }
+.route-guide .step { color: #fbbf24; font-weight: bold; }
+
+#placesList { list-style: none; padding: 0; margin: 5px 0 0 0; border: 1px solid #ddd; max-height: 200px; overflow-y: auto; background: white; display: none; border-radius: 5px; z-index: 1000; position: relative;}
+#placesList li { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 13px; }
+#placesList li:hover { background: #f0f9ff; }
+
+.existing-photos { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+.existing-photo-item { position: relative; width: 120px; height: 120px; border-radius: 8px; overflow: hidden; }
+.existing-photo-item img { width: 100%; height: 100%; object-fit: cover; }
+.existing-photo-item .delete-link { position: absolute; top: 5px; right: 5px; background: rgba(220, 53, 69, 0.9); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; text-decoration: none; }
+.existing-photo-item .vr-badge { position: absolute; bottom: 5px; left: 5px; background: rgba(59, 130, 246, 0.9); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+
+.image-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.image-preview-item { width: 120px; height: 120px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+.image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+
+.toast-msg { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: white; padding: 15px 25px; border-radius: 8px; z-index: 9999; font-size: 14px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 90%; }
+.toast-msg.success { background: #059669; }
+.toast-msg.error { background: #dc2626; }
+
+
+.route-sub-group { display: flex; gap: 5px; margin-right: 10px; }
+.route-sub-btn { background: #fff; border: 1px solid #999; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; color: #333; }
+.route-sub-btn.active { background: #059669; color: white; border-color: #047857; }
+.route-sub-btn.manual-active { background: #7c3aed; color: white; border-color: #6d28d9; }
+
+.point-counter { position: absolute; top: 60px; left: 10px; z-index: 25; background: #7c3aed; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; display: none; }
+.point-counter.active { display: block; }
+
+.route-info { position: absolute; bottom: 50px; left: 10px; z-index: 25; background: rgba(255,255,255,0.95); padding: 8px 12px; border-radius: 6px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); display: none; }
+.route-info.active { display: block; }
+.route-info .value { font-weight: bold; color: #059669; }
+
+.route-guide .manual-hint { color: #a78bfa; }
+
+
+
 </style>
 
 <div class="page-header">
-    <div>
-        <h2>✏️ 장소 수정</h2>
-        <p><?php echo htmlspecialchars($location['location_name']); ?></p>
-    </div>
-    <div style="display: flex; gap: 10px;">
-        <a href="view.php?id=<?php echo $location_id; ?>" class="btn btn-secondary">← 상세보기</a>
-        <a href="index.php" class="btn btn-secondary">목록으로</a>
-    </div>
+    <div><h2>✏️ 장소 수정</h2><p><?php echo htmlspecialchars($location['location_name']); ?></p></div>
+    <a href="view.php?id=<?php echo $location_id; ?>" class="btn btn-secondary">← 상세보기</a>
 </div>
 
-<?php if (isset($_GET['message'])): ?>
-    <div class="alert alert-success"><?php echo htmlspecialchars($_GET['message']); ?></div>
+<?php if (isset($error_message)): ?>
+    <div class="alert alert-danger"><?php echo $error_message; ?></div>
 <?php endif; ?>
 
-<?php if (isset($error_message)): ?>
-    <div class="alert alert-danger">
-        <?php echo $error_message; // html tag permitted ?>
+<?php if (isset($_GET['message'])): ?>
+    <div class="alert alert-<?php echo $_GET['type'] === 'success' ? 'success' : 'danger'; ?>">
+        <?php echo htmlspecialchars($_GET['message']); ?>
     </div>
 <?php endif; ?>
 
 <div class="form-container">
     <form method="POST" action="" enctype="multipart/form-data">
-        
+        <input type="hidden" name="geom_path" id="geom_path" value="<?php echo htmlspecialchars($location['geom_wkt'] ?? ''); ?>">
+
         <div class="form-section">
             <div class="form-section-title">📋 기본 정보</div>
-            
             <div class="form-grid">
                 <div class="form-group">
                     <label>지역 <span class="required">*</span></label>
-                    <select name="region_id" required>
+                    <select name="region_id" id="region_id" required onchange="moveToRegion(this)">
                         <option value="">선택하세요</option>
                         <?php foreach ($regions as $region): ?>
-                            <option value="<?php echo $region['region_id']; ?>"
+                            <option value="<?php echo $region['region_id']; ?>" 
+                                    data-name="<?php echo htmlspecialchars($region['region_name']); ?>"
                                     <?php echo ($form_data['region_id'] == $region['region_id']) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($region['region_name']); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                
                 <div class="form-group">
                     <label>카테고리 <span class="required">*</span></label>
-                    <select name="category_id" required>
+                    <select name="category_id" id="category_id" required>
                         <option value="">선택하세요</option>
                         <?php foreach ($categories as $category): ?>
                             <option value="<?php echo $category['category_id']; ?>"
@@ -506,182 +474,156 @@ include '../../includes/header.php';
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>장소명 <span class="required">*</span></label>
-                <input type="text" name="location_name" required 
-                       placeholder="예: 비금면 측금리 44-4옆 일원"
-                       value="<?php echo htmlspecialchars($form_data['location_name']); ?>">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>장소명 <span class="required">*</span></label>
+                    <input type="text" name="location_name" id="location_name" required 
+                           value="<?php echo htmlspecialchars($form_data['location_name'] ?? ''); ?>">
+                </div>
+                <div class="form-group">
+                    <label>주소</label>
+                    <input type="text" name="address" id="address" 
+                           value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>">
+                </div>
             </div>
-            
+
             <div class="form-grid">
                 <div class="form-group">
                     <label>장소 유형 <span class="required">*</span></label>
-                    <select name="location_type" id="location_type" required onchange="toggleFields()">
-                        <option value="urban_forest" <?php echo ($form_data['location_type'] == 'urban_forest') ? 'selected' : ''; ?>>도시숲</option>
-                        <option value="street_tree" <?php echo ($form_data['location_type'] == 'street_tree') ? 'selected' : ''; ?>>가로수</option>
+                    <select name="location_type" id="location_type" required onchange="onLocationTypeChange()">
+                        <option value="urban_forest" <?php echo ($form_data['location_type'] == 'urban_forest') ? 'selected' : ''; ?>>도시숲 (면적)</option>
+                        <option value="street_tree" <?php echo ($form_data['location_type'] == 'street_tree') ? 'selected' : ''; ?>>가로수 (경로)</option>
                         <option value="living_forest" <?php echo ($form_data['location_type'] == 'living_forest') ? 'selected' : ''; ?>>생활숲</option>
                         <option value="school" <?php echo ($form_data['location_type'] == 'school') ? 'selected' : ''; ?>>학교</option>
                         <option value="park" <?php echo ($form_data['location_type'] == 'park') ? 'selected' : ''; ?>>공원</option>
                         <option value="other" <?php echo ($form_data['location_type'] == 'other') ? 'selected' : ''; ?>>기타</option>
                     </select>
                 </div>
-                
-                <div class="form-group">
-                    <label>주소</label>
-                    <input type="text" name="address" 
-                           placeholder="예: 신안군 비금면 측금리 44-4"
-                           value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>">
-                </div>
             </div>
         </div>
-        
+
         <div class="form-section dynamic-field" id="area-section">
             <div class="form-section-title">📐 면적 정보</div>
             <div class="form-group">
                 <label>면적 (㎡)</label>
-                <input type="number" name="area" step="0.01" 
-                        placeholder="예: 1162.00"
-                        value="<?php echo $form_data['area'] ?? ''; ?>">
-                <div class="help-text">도시숲/생활숲인 경우 입력</div>
+                <input type="number" name="area" id="area" step="0.01" 
+                       value="<?php echo $form_data['area'] ?? ''; ?>">
             </div>
         </div>
         
         <div class="form-section dynamic-field" id="road-section">
-            <div class="form-section-title">🛣️ 도로 정보 (가로수)</div>
-            
+            <div class="form-section-title">🛣️ 도로/가로수 정보</div>
             <div class="form-grid">
-                <div class="form-group">
-                    <label>도로명/노선명</label>
-                    <input type="text" name="road_name" 
-                           placeholder="예: 국도(2) 서남문로"
-                           value="<?php echo htmlspecialchars($form_data['road_name'] ?? ''); ?>">
-                </div>
-                <div class="form-group">
-                    <label>도로 종류</label>
-                    <input type="text" name="road_type" 
-                           placeholder="예: 국도, 지방도, 군도 등"
-                           value="<?php echo htmlspecialchars($form_data['road_type'] ?? ''); ?>">
-                </div>
+                <div class="form-group"><label>도로명</label><input type="text" name="road_name" id="road_name" value="<?php echo htmlspecialchars($form_data['road_name'] ?? ''); ?>"></div>
+                <div class="form-group"><label>도로 종류</label><input type="text" name="road_type" value="<?php echo htmlspecialchars($form_data['road_type'] ?? ''); ?>"></div>
             </div>
-            
             <div class="form-grid">
-                <div class="form-group">
-                    <label>시점</label>
-                    <input type="text" name="section_start" 
-                           placeholder="예: 가산선착장(가산리 181-1)"
-                           value="<?php echo htmlspecialchars($form_data['section_start'] ?? ''); ?>">
-                </div>
-                
-                <div class="form-group">
-                    <label>종점</label>
-                    <input type="text" name="section_end" 
-                           placeholder="예: 음동마을(덕산리 138-3)"
-                           value="<?php echo htmlspecialchars($form_data['section_end'] ?? ''); ?>">
-                </div>
+                <div class="form-group"><label>시점</label><input type="text" name="section_start" id="section_start" value="<?php echo htmlspecialchars($form_data['section_start'] ?? ''); ?>"></div>
+                <div class="form-group"><label>종점</label><input type="text" name="section_end" id="section_end" value="<?php echo htmlspecialchars($form_data['section_end'] ?? ''); ?>"></div>
             </div>
-
             <div class="form-grid">
-                <div class="form-group">
-                    <label>총 연장거리 (m)</label>
-                    <input type="number" name="length" step="0.01" 
-                           placeholder="예: 7538.00"
-                           value="<?php echo $form_data['length'] ?? ''; ?>">
-                </div>
-                <div class="form-group">
-                    <label>도로 폭 (m)</label>
-                    <input type="number" name="width" step="0.01" 
-                           placeholder="예: 12.00"
-                           value="<?php echo $form_data['width'] ?? ''; ?>">
-                </div>
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <div class="form-section-title">👤 관리 정보</div>
-            
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>조성년도</label>
-                    <input type="number" name="establishment_year" min="1900" max="2100" 
-                           placeholder="예: 2020"
-                           value="<?php echo $form_data['establishment_year'] ?? ''; ?>">
-                </div>
-                <div class="form-group">
-                    <label>관리기관</label>
-                    <input type="text" name="management_agency" 
-                           placeholder="예: 신안군 산림과"
-                           value="<?php echo htmlspecialchars($form_data['management_agency'] ?? ''); ?>">
-                </div>
-            </div>
-
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>관리 책임자</label>
-                    <input type="text" name="manager_name" 
-                           placeholder="예: 홍길동"
-                           value="<?php echo htmlspecialchars($form_data['manager_name'] ?? ''); ?>">
-                </div>
-                
-                <div class="form-group">
-                    <label>관리 연락처</label>
-                    <input type="text" name="manager_contact" 
-                           placeholder="예: 010-1234-5678"
-                           value="<?php echo htmlspecialchars($form_data['manager_contact'] ?? ''); ?>">
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label>비고</label>
-                <textarea name="description" 
-                          placeholder="추가 설명이나 특이사항을 입력하세요"><?php echo htmlspecialchars($form_data['description'] ?? ''); ?></textarea>
+                <div class="form-group"><label>연장 (m)</label><input type="number" name="length" id="length" step="0.01" value="<?php echo $form_data['length'] ?? ''; ?>"></div>
+                <div class="form-group"><label>폭 (m)</label><input type="number" name="width" step="0.01" value="<?php echo $form_data['width'] ?? ''; ?>"></div>
             </div>
         </div>
 
         <div class="form-section">
-            <div class="form-section-title">📍 GPS 좌표</div>
-            <div class="form-group">
-                <label>지도에서 위치 선택</label>
-                <div id="map"></div>
-                <div class="gps-info" id="gps-info" style="<?php echo ($form_data['latitude'] && $form_data['longitude']) ? '' : 'display: none;'; ?>">
-                    <strong>선택된 좌표:</strong> 
-                    <span id="selected-coords">
-                        <?php if ($form_data['latitude'] && $form_data['longitude']): ?>
-                            위도 <?php echo number_format($form_data['latitude'], 8); ?>, 
-                            경도 <?php echo number_format($form_data['longitude'], 8); ?>
-                        <?php endif; ?>
-                    </span>
-                </div>
-            </div>
+            <div class="form-section-title">📍 위치 설정</div>
             
+            <div class="form-group">
+                <label>🔍 장소/주소 검색</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="keyword" placeholder="장소명 또는 주소 (예: 도초면)" 
+                           onkeypress="if(event.key==='Enter'){event.preventDefault(); searchPlaces();}">
+                    <button type="button" class="btn btn-secondary" onclick="searchPlaces()" style="width: 100px;">검색</button>
+                </div>
+                <ul id="placesList"></ul>
+            </div>
+
+<div class="form-group">
+    <div id="map">
+        <div class="map-loading" id="mapLoading">데이터 불러오는 중...</div>
+        <div class="map-controls">
+            <div class="mode-group">
+                <button type="button" class="mode-btn selected" id="modePoint" onclick="setMode('point')">📍 위치/면적</button>
+                <button type="button" class="mode-btn" id="modeRoute" onclick="setMode('route')">🛣️ 가로수 경로</button>
+            </div>
+            <!-- ⭐ 추가: 자동/수동 선택 버튼 -->
+            <div class="route-sub-group" id="routeSubGroup" style="display:none;">
+                <button type="button" class="route-sub-btn active" id="btnAutoRoute" onclick="setRouteType('auto')">🚗 자동</button>
+                <button type="button" class="route-sub-btn" id="btnManualRoute" onclick="setRouteType('manual')">✏️ 수동</button>
+            </div>
+            <span style="width:1px; background:#ccc; margin:0 5px;"></span>
+            <button type="button" class="map-btn active" id="btnRoadmap" onclick="setMapType('roadmap', this)">일반지도</button>
+            <button type="button" class="map-btn" id="btnSkyview" onclick="setMapType('skyview', this)">위성지도</button>
+            <button type="button" class="map-btn" id="btnVWorld" onclick="toggleVWorldWFS(this)">🔲 지적도</button>
+        </div>
+        <!-- ⭐ 추가: 포인트 카운터 -->
+        <div class="point-counter" id="pointCounter">📍 0개</div>
+        <!-- ⭐ 추가: 경로 정보 -->
+        <div class="route-info" id="routeInfo"><span class="label">연장:</span> <span class="value" id="routeDistance">0</span>m</div>
+        <div class="route-guide" id="routeGuide">
+            <span class="step" id="routeStep">1️⃣ 시점</span>을 클릭하세요
+        </div>
+    </div>
+    <div class="gps-info" id="gps-info" style="<?php echo ($form_data['latitude'] && $form_data['longitude']) ? '' : 'display: none;'; ?>">
+        <span>📌 <strong>좌표:</strong> <span id="selected-coords">
+            <?php if ($form_data['latitude'] && $form_data['longitude']): ?>
+                위도 <?php echo number_format($form_data['latitude'], 6); ?>, 경도 <?php echo number_format($form_data['longitude'], 6); ?>
+            <?php endif; ?>
+        </span></span>
+        <div style="display:flex;gap:8px;">
+            <!-- ⭐ 추가: 되돌리기 버튼 -->
+            <button type="button" class="btn btn-sm" id="btnUndo" onclick="undoLastPoint()" style="display:none;background:#7c3aed;color:white;">↩️ 되돌리기</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearMapSelection()">🗑️ 초기화</button>
+        </div>
+    </div>
+</div>
+
+
+
+
+
+
             <div class="form-grid">
                 <div class="form-group">
                     <label>위도 (Latitude)</label>
                     <input type="number" name="latitude" id="latitude" step="0.00000001" 
-                           placeholder="예: 34.8234567"
-                           value="<?php echo $form_data['latitude'] ?? ''; ?>" readonly>
+                           value="<?php echo $form_data['latitude'] ?? ''; ?>" readonly style="background:#f9fafb;">
                 </div>
-                
                 <div class="form-group">
                     <label>경도 (Longitude)</label>
                     <input type="number" name="longitude" id="longitude" step="0.00000001" 
-                           placeholder="예: 126.1234567"
-                           value="<?php echo $form_data['longitude'] ?? ''; ?>" readonly>
+                           value="<?php echo $form_data['longitude'] ?? ''; ?>" readonly style="background:#f9fafb;">
                 </div>
             </div>
+        </div>
+
+        <div class="form-section">
+            <div class="form-section-title">👤 관리 정보</div>
+            <div class="form-grid">
+                <div class="form-group"><label>조성년도</label><input type="number" name="establishment_year" value="<?php echo $form_data['establishment_year'] ?? ''; ?>"></div>
+                <div class="form-group"><label>관리기관</label><input type="text" name="management_agency" value="<?php echo htmlspecialchars($form_data['management_agency'] ?? ''); ?>"></div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group"><label>관리자</label><input type="text" name="manager_name" value="<?php echo htmlspecialchars($form_data['manager_name'] ?? ''); ?>"></div>
+                <div class="form-group"><label>연락처</label><input type="text" name="manager_contact" value="<?php echo htmlspecialchars($form_data['manager_contact'] ?? ''); ?>"></div>
+            </div>
+            <div class="form-group"><label>비고</label><textarea name="description"><?php echo htmlspecialchars($form_data['description'] ?? ''); ?></textarea></div>
         </div>
 
         <div class="form-section">
             <div class="form-section-title">📷 멀티미디어</div>
             
             <div class="form-group">
-                <label>기존 사진 (삭제)</label>
+                <label>기존 사진</label>
                 <div class="existing-photos">
                     <?php if (empty($photos)): ?>
                         <p style="color: #888; font-size: 14px;">등록된 사진이 없습니다.</p>
                     <?php endif; ?>
                     <?php foreach ($photos as $photo): ?>
                         <div class="existing-photo-item">
-                            <img src="<?php echo BASE_URL . '/' . htmlspecialchars($photo['file_path']); ?>" alt="<?php echo htmlspecialchars($photo['file_name']); ?>">
+                            <img src="<?php echo BASE_URL . '/' . htmlspecialchars($photo['file_path']); ?>" alt="">
                             <?php if ($photo['photo_type'] === 'vr360'): ?>
                                 <span class="vr-badge">360° VR</span>
                             <?php endif; ?>
@@ -696,22 +638,21 @@ include '../../includes/header.php';
             <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
             
             <div class="form-group">
-                <label>일반 사진 추가 (다중 선택 가능, 최대 <?php echo (MAX_FILE_SIZE / 1024 / 1024); ?>MB)</label>
-                <input type="file" name="images[]" accept="image/*" multiple onchange="previewImages(this)">
+                <label>사진 (다중 선택)</label>
+                <input type="file" name="images[]" accept="image/*" multiple onchange="previewImages(this,'image-previews')">
                 <div id="image-previews" class="image-preview"></div>
+
             </div>
             
             <div class="form-group">
-                <label>360도 VR 사진 추가 (최대 <?php echo (MAX_FILE_SIZE / 1024 / 1024); ?>MB)</label>
-                <input type="file" name="vr_photo" accept="image/*" onchange="previewVRImage(this)">
+                <label>360도 VR 사진 추가</label>
+                <input type="file" name="vr_photo" accept="image/*" onchange="previewImages(this,'vr-preview')">
                 <div id="vr-preview" class="image-preview"></div>
             </div>
             
             <div class="form-group">
-                <label>동영상 URL (유튜브 등)</label>
-                <input type="url" name="video_url" 
-                       placeholder="예: https://www.youtube.com/watch?v=..." 
-                       value="<?php echo htmlspecialchars($form_data['video_url'] ?? ''); ?>">
+                <label>동영상 URL</label>
+                <input type="url" name="video_url" value="<?php echo htmlspecialchars($form_data['video_url'] ?? ''); ?>">
             </div>
         </div>
         
@@ -722,108 +663,108 @@ include '../../includes/header.php';
     </form>
 </div>
 
-<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?php echo KAKAO_MAP_API_KEY; ?>&libraries=services"></script>
-<script src="<?php echo BASE_URL; ?>/assets/js/kakao_map.js"></script>
-<script>
-// 입력 필드 표시 토글
-function toggleFields() {
-    const typeSelect = document.getElementById('location_type');
-    const selectedType = typeSelect.value;
-    
-    const areaSection = document.getElementById('area-section');
-    const roadSection = document.getElementById('road-section');
-    
-    // 초기화
-    areaSection.classList.remove('active');
-    roadSection.classList.remove('active');
-    
-    if (selectedType === 'street_tree') {
-        // 가로수인 경우 도로 정보 표시
-        roadSection.classList.add('active');
-    } else {
-        // 그 외(도시숲, 생활숲, 공원 등)인 경우 면적 정보 표시
-        areaSection.classList.add('active');
-    }
-}
 
-// 페이지 로드 시 초기 실행
-document.addEventListener('DOMContentLoaded', toggleFields);
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<?= KAKAO_MAP_API_KEY ?>&libraries=services"></script>
+<script src="<?= BASE_URL ?>/assets/js/location_map_common.js"></script>
+
+<script>
+// edit.php 전용 변수 및 초기 데이터
+const initialLat = <?= $form_data['latitude'] ?? 'null' ?> || <?= DEFAULT_LAT ?>;
+const initialLng = <?= $form_data['longitude'] ?? 'null' ?> || <?= DEFAULT_LNG ?>;
+const existingGeomWkt = <?= json_encode($location['geom_wkt'] ?? '') ?>;
+
+// ⭐ 추가: 경로 타입 변수 (자동/수동 선택)
+var routeType = 'auto';
 
 // 지도 초기화
-const initialLat = <?php echo $form_data['latitude'] ?? DEFAULT_LAT; ?>;
-const initialLng = <?php echo $form_data['longitude'] ?? DEFAULT_LNG; ?>;
-const mapContainer = document.getElementById('map');
-const mapOption = {
-    center: new kakao.maps.LatLng(initialLat, initialLng),
-    level: <?php echo DEFAULT_ZOOM; ?>
-};
-const map = new kakao.maps.Map(mapContainer, mapOption);
-let marker = null;
-
-// 기존 좌표가 있으면 마커 표시
-<?php if ($form_data['latitude'] && $form_data['longitude']): ?>
-    const existingPosition = new kakao.maps.LatLng(initialLat, initialLng);
-    marker = new kakao.maps.Marker({ position: existingPosition, map: map });
-<?php endif; ?>
-
-// 지도 클릭 이벤트
-kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-    const latlng = mouseEvent.latLng;
-    if (marker) marker.setMap(null);
-    marker = new kakao.maps.Marker({ position: latlng, map: map });
+$(function() {
+    initializeMap(initialLat, initialLng, 3);
+    toggleFields();
     
-    document.getElementById('latitude').value = latlng.getLat();
-    document.getElementById('longitude').value = latlng.getLng();
+    // 기존 마커 표시
+    <?php if ($form_data['latitude'] && $form_data['longitude']): ?>
+    currentMarker = new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(initialLat, initialLng),
+        map: map
+    });
+    <?php endif; ?>
     
-    document.getElementById('gps-info').style.display = 'block';
-    document.getElementById('selected-coords').textContent = 
-        `위도 ${latlng.getLat().toFixed(8)}, 경도 ${latlng.getLng().toFixed(8)}`;
-
-    // 역지오코딩
-    if (typeof searchCoordinateToAddress === 'function') {
-        searchCoordinateToAddress(latlng.getLat(), latlng.getLng(), function(result) {
-            if (result.success) {
-                const addressValue = result.roadAddress ? result.roadAddress : result.address;
-                const addressInput = document.querySelector('input[name="address"]');
-                if (addressInput && !addressInput.value) { 
-                    addressInput.value = addressValue;
-                }
-            }
-        });
+    // 기존 경로 또는 폴리곤 표시
+    if (existingGeomWkt) {
+        drawExistingGeometry(existingGeomWkt);
+    }
+    
+    // 가로수인 경우 경로 모드로 설정
+    if($('#location_type').val() === 'street_tree') {
+        setMode('route', true);
     }
 });
 
-// 이미지 미리보기
-function previewImages(input) {
-    const preview = document.getElementById('image-previews');
-    preview.innerHTML = '';
-    if (input.files) {
-        Array.from(input.files).forEach((file, index) => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const div = document.createElement('div');
-                div.className = 'image-preview-item';
-                div.innerHTML = `<img src="${e.target.result}" alt="Preview ${index + 1}">`;
-                preview.appendChild(div);
-            };
-            reader.readAsDataURL(file);
+// 기존 geometry 표시 함수
+function drawExistingGeometry(wkt) {
+    if (!wkt) return;
+    
+    const path = [];
+    
+    if (wkt.startsWith('LINESTRING')) {
+        const coordsStr = wkt.replace('LINESTRING(', '').replace(')', '');
+        const coords = coordsStr.split(',');
+        coords.forEach(coord => {
+            const parts = coord.trim().split(' ');
+            if (parts.length >= 2) {
+                path.push(new kakao.maps.LatLng(parseFloat(parts[1]), parseFloat(parts[0])));
+            }
         });
+        
+        if (path.length > 0) {
+            routePolyline = new kakao.maps.Polyline({
+                map: map, path: path,
+                strokeWeight: 8, strokeColor: '#db4040',
+                strokeOpacity: 0.9, strokeStyle: 'solid'
+            });
+            
+            routeStart = { lat: path[0].getLat(), lng: path[0].getLng() };
+            routeEnd = { lat: path[path.length-1].getLat(), lng: path[path.length-1].getLng() };
+            
+            routeStartMarker = new kakao.maps.Marker({
+                map: map, position: path[0],
+                image: new kakao.maps.MarkerImage('https://www.im4u.kr/icons/uploads/icons/red_b_1765370086_8bf43d62.png', 
+                    new kakao.maps.Size(50, 45), { offset: new kakao.maps.Point(15, 43) })
+            });
+            routeEndMarker = new kakao.maps.Marker({
+                map: map, position: path[path.length-1],
+                image: new kakao.maps.MarkerImage('https://www.im4u.kr/icons/uploads/icons/blue_b_1765370086_8af75b2a.png', 
+                    new kakao.maps.Size(50, 45), { offset: new kakao.maps.Point(15, 43) })
+            });
+        }
+    } else if (wkt.startsWith('POLYGON')) {
+        const coordsStr = wkt.replace('POLYGON((', '').replace('))', '');
+        const coords = coordsStr.split(',');
+        coords.forEach(coord => {
+            const parts = coord.trim().split(' ');
+            if (parts.length >= 2) {
+                path.push(new kakao.maps.LatLng(parseFloat(parts[1]), parseFloat(parts[0])));
+            }
+        });
+        
+        if (path.length > 2) {
+            selectedPolygon = new kakao.maps.Polygon({
+                map: map, path: path,
+                strokeWeight: 3, strokeColor: '#ff0000', strokeOpacity: 1,
+                fillColor: '#ff0000', fillOpacity: 0.3
+            });
+        }
     }
 }
 
-function previewVRImage(input) {
-    const preview = document.getElementById('vr-preview');
-    preview.innerHTML = '';
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const div = document.createElement('div');
-            div.className = 'image-preview-item';
-            div.innerHTML = `<img src="${e.target.result}" alt="VR Preview">`;
-            preview.appendChild(div);
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
+// edit.php에서는 toggleVWorld 대신 toggleVWorldWFS 사용
+function toggleVWorldWFS(btn) {
+    toggleVWorld(btn);
+}
+
+// clearMapSelection은 clearMap과 동일
+function clearMapSelection() {
+    clearMap();
 }
 </script>
 

@@ -17,7 +17,7 @@ $location_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!$location_id) {
     $_SESSION['error_message'] = '잘못된 접근입니다.';
-    header('Location: index.php');
+    header('Location: list.php');
     exit;
 }
 
@@ -37,7 +37,7 @@ $location = $stmt->fetch();
 
 if (!$location) {
     $_SESSION['error_message'] = '장소를 찾을 수 없습니다.';
-    header('Location: index.php');
+    header('Location: list.php');
     exit;
 }
 
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirm_delete'])) {
         
         if ($delete_stmt->execute()) {
             $_SESSION['success_message'] = '장소가 성공적으로 삭제되었습니다.';
-            header('Location: index.php');
+            header('Location: list.php');
             exit;
         } else {
             throw new Exception('삭제 중 오류가 발생했습니다.');
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirm_delete'])) {
         
     } catch (Exception $e) {
         $_SESSION['error_message'] = $e->getMessage();
-        header('Location: index.php');
+        header('Location: list.php');
         exit;
     }
 }

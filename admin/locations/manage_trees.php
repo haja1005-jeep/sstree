@@ -12,6 +12,95 @@ checkAuth();
 $database = new Database();
 $db = $database->getConnection();
 
+/**
+ * CO2 계산 유틸
+ * - 입력: 평균 DBH(cm), 수량(주), (선택) 수고(m)
+ * - 출력: [co2_stock_kg, co2_annual_kg, method, note]
+ *
+ * 주의:
+ *  - 계수(a,b)가 없으면 기본계수(보수적)로 계산
+ *  - annual은 annual_dbh_growth_cm 가정치가 있을 때만 계산 (없으면 null)
+ */
+function loadCo2Coeff(PDO $db, int $species_id): array {
+    // species별 계수 조회 (없으면 기본값 사용)
+    $stmt = $db->prepare("SELECT a, b, annual_dbh_growth_cm, source_note
+                          FROM tree_co2_coeff
+                          WHERE species_id = :sid
+                          LIMIT 1");
+    $stmt->bindValue(':sid', $species_id, PDO::PARAM_INT);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // 기본값(임시): DBH 기반 바이오매스 추정용 보수적 계수
+    // 실제 운영에서는 species별 계수로 교체 권장
+    $default = [
+        'a' => 0.10,                 // (kg) 계수(임시)
+        'b' => 2.40,                 // 지수(임시)
+        'annual_dbh_growth_cm' => null, // 없으면 연간 흡수량 계산 안 함
+        'source_note' => 'DEFAULT_COEFF_V1 (임시 계수, 추정치)'
+    ];
+
+    if (!$row) return $default;
+
+    return [
+        'a' => isset($row['a']) ? (float)$row['a'] : $default['a'],
+        'b' => isset($row['b']) ? (float)$row['b'] : $default['b'],
+        'annual_dbh_growth_cm' => ($row['annual_dbh_growth_cm'] !== null) ? (float)$row['annual_dbh_growth_cm'] : null,
+        'source_note' => $row['source_note'] ?: 'tree_co2_coeff'
+    ];
+}
+
+function calcCo2FromDbh(?float $dbh_cm, int $qty, float $a, float $b): float {
+    // 바이오매스(kg) = a * DBH^b (단순화)
+    // 탄소(kgC) = 바이오매스 * 0.5
+    // CO2(kgCO2) = 탄소 * (44/12)
+    if ($dbh_cm === null || $dbh_cm <= 0 || $qty <= 0) return 0.0;
+
+    $biomass_kg = $a * pow($dbh_cm, $b);
+    $carbon_kg  = $biomass_kg * 0.5;
+    $co2_kg     = $carbon_kg * (44.0 / 12.0);
+
+    return $co2_kg * $qty;
+}
+
+function calcCo2Payload(PDO $db, int $species_id, int $qty, ?float $avg_height_m, ?float $avg_dbh_cm): array {
+    if ($qty <= 0 || $avg_dbh_cm === null || $avg_dbh_cm <= 0) {
+        return [
+            'co2_stock_kg' => null,
+            'co2_annual_kg' => null,
+            'method' => null,
+            'note' => 'DBH 미입력: CO2 계산 생략'
+        ];
+    }
+
+    $coeff = loadCo2Coeff($db, $species_id);
+
+    $stock = calcCo2FromDbh($avg_dbh_cm, $qty, $coeff['a'], $coeff['b']);
+
+    // 연간 흡수량(추정) = (DBH+성장)^저장량 - 현재저장량
+    $annual = null;
+    if ($coeff['annual_dbh_growth_cm'] !== null && $coeff['annual_dbh_growth_cm'] > 0) {
+        $next = calcCo2FromDbh($avg_dbh_cm + $coeff['annual_dbh_growth_cm'], $qty, $coeff['a'], $coeff['b']);
+        $annual = max(0.0, $next - $stock);
+    }
+
+    $method = 'DBH_EQ_V1';
+    $note = $coeff['source_note'];
+    if ($annual === null) {
+        $note .= ' / annual_dbh_growth_cm 없음 → 연간흡수량 NULL';
+    }
+
+    return [
+        'co2_stock_kg' => round($stock, 2),
+        'co2_annual_kg' => ($annual !== null) ? round($annual, 2) : null,
+        'method' => $method,
+        'note' => $note
+    ];
+}
+
+
+
+
 // 장소 ID 확인
 $location_id = isset($_GET['location_id']) ? (int)$_GET['location_id'] : 0;
 
@@ -72,15 +161,19 @@ if (isset($_GET['delete'])) {
 
 // 폼 제출 처리
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $species_id = $_POST['species_id'];
-    $quantity = $_POST['quantity'];
-    $size_spec = trim($_POST['size_spec']);
-    $average_height = $_POST['average_height'] ? $_POST['average_height'] : null;
-    $average_diameter = $_POST['average_diameter'] ? $_POST['average_diameter'] : null;
-    $root_diameter = $_POST['root_diameter'] ? $_POST['root_diameter'] : null;
-    $notes = trim($_POST['notes']);
+
+	$species_id = (int)$_POST['species_id'];
+    $quantity = (int)$_POST['quantity'];
+    $size_spec = trim((string)$_POST['size_spec']);
+    $average_height = ($_POST['average_height'] !== '' ? (float)$_POST['average_height'] : null);
+    $average_diameter = ($_POST['average_diameter'] !== '' ? (float)$_POST['average_diameter'] : null);
+    $root_diameter = ($_POST['root_diameter'] !== '' ? (float)$_POST['root_diameter'] : null);
+    $notes = trim((string)$_POST['notes']);
     
     try {
+
+        $co2 = calcCo2Payload($db, $species_id, $quantity, $average_height, $average_diameter);
+		 
         if ($edit_id) {
             // 수정
             $update_query = "UPDATE location_trees SET
@@ -91,9 +184,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             average_diameter = :average_diameter,
                             root_diameter = :root_diameter,
                             notes = :notes,
+							co2_stock_kg = :co2_stock_kg,
+                            co2_annual_kg = :co2_annual_kg,
+                            co2_calc_method = :co2_calc_method,
+                            co2_calc_note = :co2_calc_note,
                             updated_at = NOW()
                             WHERE location_tree_id = :id AND location_id = :location_id";
-            
+
+           
             $update_stmt = $db->prepare($update_query);
             $update_stmt->bindParam(':species_id', $species_id);
             $update_stmt->bindParam(':quantity', $quantity);
@@ -102,6 +200,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $update_stmt->bindParam(':average_diameter', $average_diameter);
             $update_stmt->bindParam(':root_diameter', $root_diameter);
             $update_stmt->bindParam(':notes', $notes);
+			$update_stmt->bindValue(':co2_stock_kg', $co2['co2_stock_kg']);
+            $update_stmt->bindValue(':co2_annual_kg', $co2['co2_annual_kg']);
+            $update_stmt->bindValue(':co2_calc_method', $co2['method']);
+            $update_stmt->bindValue(':co2_calc_note', $co2['note']);
             $update_stmt->bindParam(':id', $edit_id);
             $update_stmt->bindParam(':location_id', $location_id);
             
@@ -112,12 +214,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         } else {
             // 추가
-            $insert_query = "INSERT INTO location_trees 
-                            (location_id, species_id, quantity, size_spec, average_height, 
-                             average_diameter, root_diameter, notes, created_at, updated_at)
-                            VALUES 
+            $insert_query = "INSERT INTO location_trees
+                            (location_id, species_id, quantity, size_spec, average_height,
+                             average_diameter, root_diameter, notes,
+                             co2_stock_kg, co2_annual_kg, co2_calc_method, co2_calc_note,created_at, updated_at)
+                                
+                             VALUES
                             (:location_id, :species_id, :quantity, :size_spec, :average_height,
-                             :average_diameter, :root_diameter, :notes, NOW(), NOW())";
+                             :average_diameter, :root_diameter, :notes,
+                             :co2_stock_kg, :co2_annual_kg, :co2_calc_method, :co2_calc_note, NOW(), NOW())";
+ 
             
             $insert_stmt = $db->prepare($insert_query);
             $insert_stmt->bindParam(':location_id', $location_id);
@@ -128,6 +234,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $insert_stmt->bindParam(':average_diameter', $average_diameter);
             $insert_stmt->bindParam(':root_diameter', $root_diameter);
             $insert_stmt->bindParam(':notes', $notes);
+			$insert_stmt->bindValue(':co2_stock_kg', $co2['co2_stock_kg']);
+            $insert_stmt->bindValue(':co2_annual_kg', $co2['co2_annual_kg']);
+            $insert_stmt->bindValue(':co2_calc_method', $co2['method']);
+            $insert_stmt->bindValue(':co2_calc_note', $co2['note']);
+
             
             if ($insert_stmt->execute()) {
                 $_SESSION['success_message'] = '수목이 추가되었습니다.';
@@ -163,6 +274,10 @@ $trees_stmt = $db->prepare($trees_query);
 $trees_stmt->bindParam(':location_id', $location_id);
 $trees_stmt->execute();
 $trees = $trees_stmt->fetchAll();
+
+$total_co2_stock = array_sum(array_map(fn($t) => (float)($t['co2_stock_kg'] ?? 0), $trees));
+$total_co2_annual = array_sum(array_map(fn($t) => (float)($t['co2_annual_kg'] ?? 0), $trees));
+
 
 $page_title = '수목 관리';
 include '../../includes/header.php';
@@ -506,6 +621,16 @@ include '../../includes/header.php';
             </div>
         </div>
 
+<div class="summary-row">
+  <div class="summary-label">총 CO₂ 저장량(추정)</div>
+  <div class="summary-value"><?php echo number_format($total_co2_stock, 2); ?> kg</div>
+</div>
+<div class="summary-row">
+  <div class="summary-label">연간 CO₂ 흡수량(추정)</div>
+  <div class="summary-value"><?php echo number_format($total_co2_annual, 2); ?> kg/yr</div>
+</div>
+
+
         <div class="tree-list">
             <?php foreach ($trees as $tree): ?>
             <div class="tree-item <?php echo ($edit_id == $tree['location_tree_id']) ? 'editing' : ''; ?>">
@@ -562,6 +687,23 @@ include '../../includes/header.php';
                         <div class="detail-value"><?php echo number_format($tree['root_diameter'], 2); ?>cm</div>
                     </div>
                     <?php endif; ?>
+
+                    <?php if (!empty($tree['co2_stock_kg'])): ?>
+<div class="detail-item">
+  <div class="detail-label">CO₂ 저장:</div>
+  <div class="detail-value"><?php echo number_format($tree['co2_stock_kg'], 2); ?> kg</div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($tree['co2_annual_kg'])): ?>
+<div class="detail-item">
+  <div class="detail-label">CO₂ 연간흡수:</div>
+  <div class="detail-value"><?php echo number_format($tree['co2_annual_kg'], 2); ?> kg/yr</div>
+</div>
+<?php endif; ?>
+
+
+
                 </div>
 
                 <?php if ($tree['notes']): ?>
