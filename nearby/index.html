@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#0f766e">
 <title>내 주변 한눈에</title>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,7 +15,7 @@
     <button id="btnLocate" title="내 위치로">🎯</button>
   </div>
   <form id="searchForm">
-    <input id="q" placeholder="다른 도시·장소 검색 (예: 제주공항, 도쿄역)" autocomplete="off">
+    <input id="q" placeholder="다른 도시·장소 검색 (예: 제주공항, 부산역)" autocomplete="off">
     <button>검색</button>
   </form>
   <nav id="chips"></nav>
@@ -35,7 +34,7 @@
   </div>
   <ul id="list"></ul>
 </section>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

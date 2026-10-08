@@ -1,23 +1,20 @@
 'use strict';
-// 카테고리 정의: OSM 태그 → 앱 카테고리
+// 카카오 로컬 API (JS SDK services): 카테고리 코드 또는 키워드로 검색
 const CATS = {
-  fuel:    {label:'주유소',   icon:'⛽', q:['[amenity=fuel]','[amenity=charging_station]']},
-  food:    {label:'음식점',   icon:'🍽️', q:['[amenity~"^(restaurant|fast_food)$"]']},
-  cafe:    {label:'카페',     icon:'☕', q:['[amenity=cafe]']},
-  stay:    {label:'숙박',     icon:'🛏️', q:['[tourism~"^(hotel|motel|hostel|guest_house|apartment)$"]']},
-  rental:  {label:'렌트카',   icon:'🚗', q:['[amenity=car_rental]']},
-  taxi:    {label:'택시',     icon:'🚕', q:['[amenity=taxi]']},
-  subway:  {label:'지하철·역', icon:'🚇', q:['[railway=subway_entrance]','[railway=station]','[public_transport=station]']},
-  sight:   {label:'랜드마크', icon:'🏛️', q:['[tourism~"^(attraction|museum|viewpoint|gallery|theme_park|zoo)$"]','[historic~"^(monument|castle|memorial|ruins|archaeological_site)$"]']},
+  fuel:   {label:'주유소',   icon:'⛽', src:[['c','OL7']]},
+  food:   {label:'음식점',   icon:'🍽️', src:[['c','FD6']]},
+  cafe:   {label:'카페',     icon:'☕', src:[['c','CE7']]},
+  stay:   {label:'숙박',     icon:'🛏️', src:[['c','AD5']]},
+  rental: {label:'렌트카',   icon:'🚗', src:[['k','렌터카']]},
+  taxi:   {label:'택시',     icon:'🚕', src:[['k','택시']]},
+  subway: {label:'지하철·역', icon:'🚇', src:[['c','SW8'],['k','지하철 출구']]},
+  sight:  {label:'랜드마크', icon:'🏛️', src:[['c','AT4'],['c','CT1']]},
 };
-const OVERPASS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+const PAGES = 2; // 검색 1회당 최대 15건 × 2페이지
 
 const $ = id => document.getElementById(id);
-const state = {pos:null, items:[], active:new Set(Object.keys(CATS)), markers:null, me:null, radius:2000, n:0};
-
-const map = L.map('map',{zoomControl:false}).setView([37.5665,126.978],14);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-state.markers = L.layerGroup().addTo(map);
+const state = {pos:null, items:[], active:new Set(Object.keys(CATS)), radius:2000, n:0, overlays:[], me:null, iw:null};
+let map, ps, geo;
 
 // ---------- 유틸 ----------
 const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,48 +26,35 @@ function bearing(a,b,c,d){const r=Math.PI/180,y=Math.sin((d-b)*r)*Math.cos(c*r),
 const fmt = m => m<1000 ? Math.round(m/10)*10+'m' : (m/1000).toFixed(1)+'km';
 const walk = m => { const min=Math.max(1,Math.round(m/75)); return min<60?`도보 ${min}분`:`차량 ${Math.max(1,Math.round(m/600))}분`; };
 
-// ---------- 데이터 ----------
-function buildQuery(lat,lon,r){
-  const parts=[];
-  for(const c of Object.values(CATS)) for(const t of c.q) parts.push(`nwr${t}(around:${r},${lat},${lon});`);
-  return `[out:json][timeout:25];(${parts.join('')});out tags center 400;`;
+// ---------- 카카오 SDK ----------
+function loadKakao(){
+  return new Promise((ok,fail)=>{
+    if(!window.KAKAO_JS_KEY)return fail(new Error('NO_KEY'));
+    const s=document.createElement('script');
+    s.src=`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(KAKAO_JS_KEY)}&libraries=services&autoload=false`;
+    s.onload=()=>kakao.maps.load(ok);
+    s.onerror=()=>fail(new Error('SDK_LOAD'));
+    document.head.appendChild(s);
+  });
 }
-function classify(t){
-  if(t.amenity==='fuel'||t.amenity==='charging_station')return'fuel';
-  if(t.amenity==='restaurant'||t.amenity==='fast_food')return'food';
-  if(t.amenity==='cafe')return'cafe';
-  if(t.amenity==='car_rental')return'rental';
-  if(t.amenity==='taxi')return'taxi';
-  if(t.railway||t.public_transport==='station')return'subway';
-  if(/^(hotel|motel|hostel|guest_house|apartment)$/.test(t.tourism))return'stay';
-  if(t.tourism||t.historic)return'sight';
-  return null;
+const P = (fn)=>new Promise(res=>fn((data,status)=>res(status===kakao.maps.services.Status.OK?data:[])));
+function search(kind,v,lat,lon,r,page){
+  const opt={location:new kakao.maps.LatLng(lat,lon),radius:r,sort:kakao.maps.services.SortBy.DISTANCE,size:15,page};
+  return P(cb=>kind==='c'?ps.categorySearch(v,cb,opt):ps.keywordSearch(v,cb,opt));
 }
-async function fetchOverpass(lat,lon,r){
-  const body='data='+encodeURIComponent(buildQuery(lat,lon,r));
-  let err;
-  for(const url of OVERPASS){
-    try{
-      const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      return (await res.json()).elements;
-    }catch(e){err=e}
-  }
-  throw err;
-}
-function normalize(els,lat,lon){
+async function fetchAll(lat,lon,r){
+  const jobs=[];
+  for(const [cat,c] of Object.entries(CATS))
+    for(const [kind,v] of c.src)
+      for(let p=1;p<=PAGES;p++)
+        jobs.push(search(kind,v,lat,lon,r,p).then(rows=>rows.map(x=>({cat,x}))));
   const seen=new Set(),out=[];
-  for(const e of els){
-    const t=e.tags||{},cat=classify(t);if(!cat)continue;
-    const la=e.lat??e.center?.lat,lo=e.lon??e.center?.lon;if(la==null)continue;
-    let name=t['name:ko']||t.name||t.brand||t.operator||'';
-    if(!name){ if(cat==='taxi')name='택시 승강장'; else if(cat==='subway'&&t.railway==='subway_entrance')name=(t.ref?`출구 ${t.ref}`:'지하철 출입구'); else continue; }
-    // 지하철: 역 단위 중복(같은 이름·카테고리 120m 이내) 제거는 입구 번호가 다르면 유지
-    const key=cat+name+(t.ref||'')+la.toFixed(3)+lo.toFixed(3);
-    if(seen.has(key))continue;seen.add(key);
-    const d=dist(lat,lon,la,lo);
-    out.push({id:e.type+e.id,cat,name,lat:la,lon:lo,d,dir:bearing(lat,lon,la,lo),
-      sub:[t['addr:full']||t['addr:street']&&(t['addr:street']+' '+(t['addr:housenumber']||'')),t.cuisine,t.brand,t.opening_hours&&('🕒 '+t.opening_hours)].filter(Boolean).join(' · ')});
+  for(const {cat,x} of (await Promise.all(jobs)).flat()){
+    if(seen.has(x.id))continue;seen.add(x.id);
+    const la=+x.y,lo=+x.x,d=x.distance?+x.distance:dist(lat,lon,la,lo);
+    if(d>r)continue;
+    out.push({id:x.id,cat,name:x.place_name,lat:la,lon:lo,d,dir:bearing(lat,lon,la,lo),url:x.place_url,
+      sub:[x.road_address_name||x.address_name,x.phone].filter(Boolean).join(' · ')});
   }
   return out.sort((a,b)=>a.d-b.d);
 }
@@ -81,61 +65,70 @@ function renderChips(){
   $('chips').innerHTML=Object.entries(CATS).map(([k,c])=>
     `<button class="chip ${state.active.has(k)?'on':''}" data-k="${k}">${c.icon} ${c.label} ${counts[k]||0}</button>`).join('');
 }
+function showInfo(it){
+  if(state.iw)state.iw.close();
+  state.iw=new kakao.maps.InfoWindow({position:new kakao.maps.LatLng(it.lat,it.lon),yAnchor:1.6,
+    content:`<div class="iw"><b>${esc(it.name)}</b><br>${CATS[it.cat].label} · ${fmt(it.d)} ${it.dir}</div>`});
+  state.iw.open(map);
+}
 function renderAll(){
   renderChips();
   const shown=state.items.filter(i=>state.active.has(i.cat));
-  // 카테고리별 가장 가까운 3곳을 먼저 보여주고 나머지는 거리순
-  const top=new Set(),first=[];const per={};
+  // 카테고리별 가장 가까운 3곳을 먼저, 나머지는 거리순
+  const top=new Set(),first=[],per={};
   for(const i of shown){per[i.cat]=(per[i.cat]||0)+1;if(per[i.cat]<=3){top.add(i.id);first.push(i)}}
-  const ordered=first.concat(shown.filter(i=>!top.has(i.id)));
+  const ordered=first.concat(shown.filter(i=>!top.has(i.id))).slice(0,150);
   $('status').textContent=`반경 ${fmt(state.radius)} · ${shown.length}곳 (가까운 순)`;
-  $('list').innerHTML=ordered.length?ordered.slice(0,150).map(i=>{
-    const c=CATS[i.cat],nav=`https://www.google.com/maps/dir/?api=1&destination=${i.lat},${i.lon}&travelmode=walking`;
+  $('list').innerHTML=ordered.length?ordered.map(i=>{
+    const c=CATS[i.cat],nav=`https://map.kakao.com/link/to/${encodeURIComponent(i.name)},${i.lat},${i.lon}`;
     return `<li data-id="${i.id}"><div class="ic">${c.icon}</div><div class="tx"><div class="nm">${esc(i.name)}</div>
       <div class="sub">${c.label}${i.sub?' · '+esc(i.sub):''}</div></div>
       <div class="dist">${fmt(i.d)} ${i.dir}<br><span class="sub">${walk(i.d)}</span><br><a href="${nav}" target="_blank" rel="noopener">길찾기</a></div></li>`;
   }).join(''):'<div class="empty">이 반경에는 결과가 없어요. 반경을 넓혀 보세요.</div>';
-  state.markers.clearLayers();
-  ordered.slice(0,150).forEach(i=>{
-    const m=L.marker([i.lat,i.lon],{icon:L.divIcon({className:'',html:`<div class="pin">${CATS[i.cat].icon}</div>`,iconSize:[26,26],iconAnchor:[13,13]})});
-    m.bindPopup(`<b>${esc(i.name)}</b><br>${CATS[i.cat].label} · ${fmt(i.d)} ${i.dir}`);
-    i.marker=m;state.markers.addLayer(m);
+  state.overlays.forEach(o=>o.setMap(null));
+  state.overlays=ordered.map(i=>{
+    const el=document.createElement('div');el.className='pin kpin';el.textContent=CATS[i.cat].icon;
+    el.onclick=()=>showInfo(i);
+    return new kakao.maps.CustomOverlay({map,position:new kakao.maps.LatLng(i.lat,i.lon),content:el,yAnchor:0.5});
   });
+}
+function fitRadius(lat,lon,r){
+  r=Math.min(r,2500);const dl=r/111000,dn=r/(111000*Math.cos(lat*Math.PI/180));
+  map.setBounds(new kakao.maps.LatLngBounds(new kakao.maps.LatLng(lat-dl,lon-dn),new kakao.maps.LatLng(lat+dl,lon+dn)));
 }
 
 // ---------- 흐름 ----------
 async function load(lat,lon,label){
   const n=++state.n;
-  state.pos={lat,lon};
+  state.pos={lat,lon,label};
   $('place').textContent='📍 '+(label||'내 위치');
   $('status').textContent='주변 검색 중…';
-  if(state.me)map.removeLayer(state.me);
-  state.me=L.marker([lat,lon],{icon:L.divIcon({className:'',html:'<div class="me"></div>',iconSize:[16,16]})}).addTo(map);
+  if(state.me)state.me.setMap(null);
+  const dot=document.createElement('div');dot.className='me';
+  state.me=new kakao.maps.CustomOverlay({map,position:new kakao.maps.LatLng(lat,lon),content:dot,zIndex:10});
   try{
-    let r=state.radius,els=await fetchOverpass(lat,lon,r);
+    let r=state.radius,items=await fetchAll(lat,lon,r);
     if(n!==state.n)return;
-    let items=normalize(els,lat,lon);
     // 결과가 너무 적으면 자동으로 반경 확대 (최대 10km)
     while(items.length<8&&r<10000&&n===state.n){
       r=r<2000?2000:r<5000?5000:10000;state.radius=r;$('radius').value=r;
       $('status').textContent=`결과가 적어 반경 ${fmt(r)}로 확대 중…`;
-      items=normalize(await fetchOverpass(lat,lon,r),lat,lon);
+      items=await fetchAll(lat,lon,r);
     }
     if(n!==state.n)return;
     state.items=items;
-    map.fitBounds(L.latLng(lat,lon).toBounds(Math.min(state.radius,2500)*2),{padding:[10,10]});
+    fitRadius(lat,lon,state.radius);
     renderAll();
   }catch(e){
     $('status').textContent='검색 실패: 네트워크를 확인하고 🎯를 눌러 다시 시도하세요';
     console.error(e);
   }
 }
-async function reverse(lat,lon){
-  try{
-    const j=await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=ko&zoom=16&lat=${lat}&lon=${lon}`)).json();
-    const a=j.address||{};
-    return [a.city||a.county||a.province,a.suburb||a.neighbourhood||a.quarter||a.town||a.village].filter(Boolean).join(' ')||j.display_name;
-  }catch{return null}
+function reverse(lat,lon){
+  return new Promise(res=>geo.coord2RegionCode(lon,lat,(r,st)=>{
+    const h=st===kakao.maps.services.Status.OK&&(r.find(x=>x.region_type==='H')||r[0]);
+    res(h?[h.region_2depth_name,h.region_3depth_name].filter(Boolean).join(' '):null);
+  }));
 }
 function locate(){
   $('place').textContent='📍 위치 확인 중…';
@@ -143,29 +136,48 @@ function locate(){
   navigator.geolocation.getCurrentPosition(async p=>{
     const {latitude:la,longitude:lo}=p.coords;
     load(la,lo);
-    const name=await reverse(la,lo);if(name&&state.pos.lat===la)$('place').textContent='📍 '+name;
+    const name=await reverse(la,lo);if(name&&state.pos.lat===la){state.pos.label=name;$('place').textContent='📍 '+name}
   },()=>{$('place').textContent='📍 위치 권한이 없어요 – 검색창에 장소를 입력하세요'},{enableHighAccuracy:true,timeout:10000,maximumAge:30000});
 }
 
-// ---------- 이벤트 ----------
-$('chips').onclick=e=>{const k=e.target.dataset.k;if(!k)return;
-  if(state.active.size===Object.keys(CATS).length)state.active=new Set([k]); // 처음 누르면 해당 카테고리만
-  else state.active.has(k)?state.active.delete(k):state.active.add(k);
-  if(!state.active.size)state.active=new Set(Object.keys(CATS));
-  renderAll();};
-$('list').onclick=e=>{if(e.target.tagName==='A')return;const li=e.target.closest('li');if(!li)return;
-  const it=state.items.find(i=>i.id===li.dataset.id);if(it?.marker){map.setView([it.lat,it.lon],17);it.marker.openPopup()}};
-$('btnLocate').onclick=locate;
-$('radius').onchange=e=>{state.radius=+e.target.value;if(state.pos)load(state.pos.lat,state.pos.lon,$('place').textContent.slice(2))};
-$('searchForm').onsubmit=async e=>{
-  e.preventDefault();const q=$('q').value.trim();if(!q)return;
-  $('status').textContent='장소 찾는 중…';
-  try{
-    const r=await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=ko&q=${encodeURIComponent(q)}`)).json();
-    if(!r.length){$('status').textContent='장소를 찾지 못했어요';return}
-    load(+r[0].lat,+r[0].lon,r[0].display_name.split(',').slice(0,2).join(' '));
-  }catch{$('status').textContent='검색 실패'}
-};
+// ---------- 시작 ----------
+function bind(){
+  $('chips').onclick=e=>{const k=e.target.dataset.k;if(!k)return;
+    if(state.active.size===Object.keys(CATS).length)state.active=new Set([k]); // 처음 누르면 해당 카테고리만
+    else state.active.has(k)?state.active.delete(k):state.active.add(k);
+    if(!state.active.size)state.active=new Set(Object.keys(CATS));
+    renderAll();};
+  $('list').onclick=e=>{if(e.target.tagName==='A')return;const li=e.target.closest('li');if(!li)return;
+    const it=state.items.find(i=>i.id===li.dataset.id);
+    if(it){map.setLevel(3);map.panTo(new kakao.maps.LatLng(it.lat,it.lon));showInfo(it)}};
+  $('btnLocate').onclick=locate;
+  $('radius').onchange=e=>{state.radius=+e.target.value;if(state.pos)load(state.pos.lat,state.pos.lon,state.pos.label)};
+  $('searchForm').onsubmit=e=>{
+    e.preventDefault();const q=$('q').value.trim();if(!q)return;
+    $('status').textContent='장소 찾는 중…';
+    ps.keywordSearch(q,(d,st)=>{
+      if(st===kakao.maps.services.Status.OK)return load(+d[0].y,+d[0].x,d[0].place_name);
+      geo.addressSearch(q,(a,s2)=>s2===kakao.maps.services.Status.OK
+        ?load(+a[0].y,+a[0].x,a[0].address_name):($('status').textContent='장소를 찾지 못했어요'));
+    });
+  };
+}
+function setup(msg){
+  $('place').textContent='📍 카카오 키 설정 필요';
+  $('list').innerHTML=`<div class="setup">${msg}<br>1. <code>developers.kakao.com</code>에서 앱 생성<br>
+  2. <b>JavaScript 키</b>를 <code>nearby/config.js</code>의 <code>KAKAO_JS_KEY</code>에 입력<br>
+  3. 플랫폼 &gt; Web에 현재 주소(<code>${esc(location.origin)}</code>) 등록<br>
+  4. 제품 설정에서 <b>카카오맵</b> 사용 설정 ON</div>`;
+  $('status').textContent='';
+}
+(async()=>{
+  renderChips();
+  try{await loadKakao()}catch(e){
+    return setup(e.message==='NO_KEY'?'카카오 JavaScript 키가 아직 없어요.':'카카오 SDK를 불러오지 못했어요. 키/도메인 등록을 확인하세요.');
+  }
+  map=new kakao.maps.Map($('map'),{center:new kakao.maps.LatLng(37.5665,126.978),level:4});
+  ps=new kakao.maps.services.Places();geo=new kakao.maps.services.Geocoder();
+  bind();
+  locate(); // 앱을 켜면 자동으로 현재 위치 기준 검색
+})();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
-renderChips();
-locate(); // 앱을 켜면 자동으로 현재 위치 기준 검색
