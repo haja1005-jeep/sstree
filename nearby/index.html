@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>내 주변 한눈에</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="loc">
+    <span id="place">📍 위치 확인 중…</span>
+    <button id="btnLocate" title="내 위치로">🎯</button>
+  </div>
+  <form id="searchForm">
+    <input id="q" placeholder="다른 도시·장소 검색 (예: 제주공항, 도쿄역)" autocomplete="off">
+    <button>검색</button>
+  </form>
+  <nav id="chips"></nav>
+</header>
+<div id="map"></div>
+<section id="sheet">
+  <div class="grab"></div>
+  <div class="bar">
+    <span id="status">검색 중…</span>
+    <select id="radius">
+      <option value="1000">1km</option>
+      <option value="2000" selected>2km</option>
+      <option value="5000">5km</option>
+      <option value="10000">10km</option>
+    </select>
+  </div>
+  <ul id="list"></ul>
+</section>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
